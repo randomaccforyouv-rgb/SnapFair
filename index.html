@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SnapFair — Scan & Split Bills Instantly</title>
+  <meta name="description" content="Snap a photo of any bill, assign items, split fairly. No app download needed.">
+  <meta name="theme-color" content="#6C5CE7">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- TOAST -->
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <!-- PROGRESS BAR (top of screen) -->
+  <div id="step-progress" class="step-progress hidden">
+    <div class="step-dots">
+      <span class="dot active" data-step="1">1</span>
+      <span class="dot" data-step="2">2</span>
+      <span class="dot" data-step="3">3</span>
+      <span class="dot" data-step="4">4</span>
+    </div>
+  </div>
+
+  <!-- ==================== SCREEN: HOME ==================== -->
+  <section id="screen-home" class="screen active">
+    <div class="hero">
+      <div class="logo">🧾✂️</div>
+      <h1>SnapFair</h1>
+      <p class="tagline">Scan a bill. Split it fairly. No app needed.</p>
+    </div>
+    <div class="home-actions">
+      <button id="btn-scan" class="btn btn-primary btn-large">
+        <span class="btn-icon">📸</span>
+        Scan Bill
+      </button>
+      <button id="btn-upload" class="btn btn-secondary btn-large">
+        <span class="btn-icon">🖼️</span>
+        Upload Photo
+      </button>
+      <button id="btn-manual" class="btn btn-outline btn-large">
+        <span class="btn-icon">✏️</span>
+        Enter Manually
+      </button>
+      <input type="file" id="file-input" accept="image/*" hidden>
+    </div>
+    <p class="home-footer">100% free · No signup · Works offline</p>
+  </section>
+
+  <!-- ==================== SCREEN: CAMERA ==================== -->
+  <section id="screen-camera" class="screen">
+    <video id="camera-feed" autoplay playsinline></video>
+    <div class="camera-overlay">
+      <div class="scan-frame"></div>
+    </div>
+    <div class="camera-controls">
+      <button id="btn-camera-back" class="btn btn-icon-only">✕</button>
+      <button id="btn-capture" class="btn-capture" aria-label="Take photo">
+        <span class="capture-ring"></span>
+      </button>
+      <button id="btn-flip-camera" class="btn btn-icon-only">🔄</button>
+    </div>
+    <canvas id="capture-canvas" hidden></canvas>
+  </section>
+
+  <!-- ==================== SCREEN: PROCESSING ==================== -->
+  <section id="screen-processing" class="screen">
+    <div class="processing-content">
+      <div class="scanner-animation">
+        <div class="scan-line"></div>
+        <span class="scan-icon">🧾</span>
+      </div>
+      <h2 id="ocr-status">Reading your receipt…</h2>
+      <div class="progress-bar">
+        <div id="ocr-progress" class="progress-fill" style="width:0%"></div>
+      </div>
+      <p id="ocr-detail" class="text-muted">This may take a few seconds</p>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN: ITEMS ==================== -->
+  <section id="screen-items" class="screen">
+    <div class="screen-header">
+      <h2>📝 Review Items</h2>
+      <p class="text-muted">Edit names or prices, remove mistakes</p>
+    </div>
+    <div id="items-list" class="items-list"></div>
+    <button id="btn-add-item" class="btn btn-outline btn-block">
+      + Add Item
+    </button>
+    <!-- Add Item Modal -->
+    <div id="add-item-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Add Item</h3>
+        <input id="new-item-name" type="text" placeholder="Item name" class="input">
+        <input id="new-item-price" type="number" step="0.01" min="0" placeholder="0.00" class="input">
+        <div class="modal-actions">
+          <button id="btn-cancel-item" class="btn btn-outline">Cancel</button>
+          <button id="btn-save-item" class="btn btn-primary">Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="screen-nav">
+      <button id="btn-items-back" class="btn btn-outline">← Back</button>
+      <button id="btn-items-next" class="btn btn-primary">Add People →</button>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN: PEOPLE ==================== -->
+  <section id="screen-people" class="screen">
+    <div class="screen-header">
+      <h2>👥 Who's Splitting?</h2>
+      <p class="text-muted">Add everyone at the table</p>
+    </div>
+    <div id="people-list" class="people-list"></div>
+    <div class="add-person-row">
+      <input id="person-name-input" type="text" placeholder="Name" class="input" maxlength="20">
+      <button id="btn-add-person" class="btn btn-primary">+ Add</button>
+    </div>
+    <div id="saved-groups" class="saved-groups"></div>
+    <div id="quick-add" class="quick-add">
+      <p class="text-muted small">Quick add:</p>
+      <div class="quick-chips" id="quick-chips"></div>
+    </div>
+    <div class="screen-nav">
+      <button id="btn-people-back" class="btn btn-outline">← Back</button>
+      <button id="btn-people-next" class="btn btn-primary" disabled>Assign Items →</button>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN: ASSIGN ==================== -->
+  <section id="screen-assign" class="screen">
+    <div class="screen-header">
+      <h2>🍽️ Who Had What?</h2>
+      <p class="text-muted">Tap people to assign each item</p>
+    </div>
+    <div id="assign-list" class="assign-list"></div>
+    <div class="screen-nav">
+      <button id="btn-assign-back" class="btn btn-outline">← Back</button>
+      <button id="btn-assign-next" class="btn btn-primary">See the Split →</button>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN: SUMMARY ==================== -->
+  <section id="screen-summary" class="screen">
+    <div class="screen-header">
+      <h2>💰 The Split</h2>
+    </div>
+    <div class="tax-tip-section">
+      <div class="tax-tip-row">
+        <div class="field">
+          <label for="tax-input">Tax $</label>
+          <input id="tax-input" type="number" step="0.01" min="0" value="0" class="input">
+        </div>
+        <div class="field">
+          <label for="tip-mode">Tip</label>
+          <div class="tip-toggle">
+            <button class="tip-btn active" data-tip="15">15%</button>
+            <button class="tip-btn" data-tip="18">18%</button>
+            <button class="tip-btn" data-tip="20">20%</button>
+            <button class="tip-btn" data-tip="25">25%</button>
+            <button class="tip-btn" data-tip="custom">$</button>
+          </div>
+        </div>
+      </div>
+      <div id="custom-tip-row" class="field hidden">
+        <label for="custom-tip-input">Custom Tip $</label>
+        <input id="custom-tip-input" type="number" step="0.01" min="0" value="0" class="input">
+      </div>
+    </div>
+
+    <div class="payment-info-section">
+      <details>
+        <summary>💳 Your payment handle (for request links)</summary>
+        <div class="payment-fields">
+          <div class="field">
+            <label>Venmo @</label>
+            <input id="venmo-handle" type="text" placeholder="username" class="input">
+          </div>
+          <div class="field">
+            <label>PayPal.me/</label>
+            <input id="paypal-handle" type="text" placeholder="username" class="input">
+          </div>
+          <div class="field">
+            <label>Cash App $</label>
+            <input id="cashapp-handle" type="text" placeholder="cashtag" class="input">
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div id="summary-list" class="summary-list"></div>
+
+    <div class="totals-check">
+      <div class="totals-row">
+        <span>Subtotal</span><span id="check-subtotal">$0.00</span>
+      </div>
+      <div class="totals-row">
+        <span>Tax</span><span id="check-tax">$0.00</span>
+      </div>
+      <div class="totals-row">
+        <span>Tip</span><span id="check-tip">$0.00</span>
+      </div>
+      <div class="totals-row total">
+        <span>Grand Total</span><span id="check-total">$0.00</span>
+      </div>
+    </div>
+
+    <div class="summary-actions">
+      <button id="btn-share" class="btn btn-primary btn-large btn-block">
+        📤 Share Split
+      </button>
+      <button id="btn-copy-summary" class="btn btn-secondary btn-block">
+        📋 Copy as Text
+      </button>
+      <button id="btn-new-split" class="btn btn-outline btn-block">
+        🔄 New Split
+      </button>
+    </div>
+  </section>
+
+  <!-- ==================== SCREEN: SHARED VIEW ==================== -->
+  <section id="screen-shared" class="screen">
+    <div class="screen-header">
+      <h2>💰 Your Split</h2>
+      <p class="text-muted">Someone shared a bill split with you</p>
+    </div>
+    <div id="shared-summary" class="summary-list"></div>
+    <div id="shared-totals" class="totals-check"></div>
+    <div class="summary-actions">
+      <button id="btn-shared-new" class="btn btn-primary btn-large btn-block">
+        🧾 Split Your Own Bill
+      </button>
+    </div>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
