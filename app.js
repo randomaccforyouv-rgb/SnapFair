@@ -6,12 +6,13 @@ class SnapFair {
   constructor() {
     this.items = [];
     this.people = [];
-    this.assignments = {};     // itemId -> Set of personIds
+    this.assignments = {};
     this.tax = 0;
-    this.tipPercent = 0;       // Changed: default tip 0
+    this.tipPercent = 0;
     this.tipCustom = 0;
-    this.tipMode = 'percent';  // 'percent' | 'custom'
+    this.tipMode = 'percent';
     this.currentScreen = 'home';
+    this.currentStep = 0;
     this.cameraStream = null;
     this.facingMode = 'environment';
     this.idCounter = 0;
@@ -53,15 +54,10 @@ class SnapFair {
   toast(msg, type = 'default', duration = 2500) {
     const el = this.$('#toast');
     el.textContent = msg;
-
-    // Remove all type classes
     el.classList.remove('toast-error', 'toast-success', 'toast-warning');
-
-    // Add type class
     if (type === 'error') el.classList.add('toast-error');
     if (type === 'success') el.classList.add('toast-success');
     if (type === 'warning') el.classList.add('toast-warning');
-
     el.classList.add('show');
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => el.classList.remove('show'), duration);
@@ -77,17 +73,72 @@ class SnapFair {
 
     const progress = this.$('#step-progress');
     if (step) {
+      this.currentStep = step;
       progress.classList.remove('hidden');
-      this.$$('.dot').forEach(d => {
-        const s = parseInt(d.dataset.step);
-        d.classList.toggle('active', s === step);
-        d.classList.toggle('done', s < step);
-      });
+      this.updateStepDots(step);
     } else {
+      this.currentStep = 0;
       progress.classList.add('hidden');
     }
 
     window.scrollTo(0, 0);
+  }
+
+  updateStepDots(step) {
+    this.$$('.dot').forEach(d => {
+      const s = parseInt(d.dataset.step);
+      d.classList.remove('active', 'done');
+      if (s === step) {
+        d.classList.add('active');
+      } else if (s < step) {
+        d.classList.add('done');
+      }
+    });
+
+    // Update connector lines
+    this.$$('.dot-connector').forEach(c => {
+      const afterStep = parseInt(c.dataset.after);
+      c.classList.toggle('done', afterStep < step);
+    });
+  }
+
+  // ----- Step Dot Click Navigation -----
+
+  handleDotClick(targetStep) {
+    // Only allow going BACK to completed steps
+    if (targetStep >= this.currentStep) return;
+    if (targetStep < 1 || targetStep > 4) return;
+
+    this.vibrate(5);
+
+    switch (targetStep) {
+      case 1:
+        this.renderItems();
+        this.showScreen('items', 1);
+        break;
+      case 2:
+        if (this.items.length === 0) {
+          this.toast('⚠️ Add items first', 'warning');
+          return;
+        }
+        this.renderPeople();
+        this.showScreen('people', 2);
+        break;
+      case 3:
+        if (this.people.length < 2) {
+          this.toast('⚠️ Add people first', 'warning');
+          return;
+        }
+        this.initAssignments();
+        this.renderAssignments();
+        this.showScreen('assign', 3);
+        break;
+      case 4:
+        if (!this.validateAssignments()) return;
+        this.renderSummary();
+        this.showScreen('summary', 4);
+        break;
+    }
   }
 
   // ----- Initialization -----
@@ -95,6 +146,13 @@ class SnapFair {
   init() {
     // Check for shared split in URL
     if (this.loadSharedSplit()) return;
+
+    // Step dot click navigation
+    this.$$('.dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        this.handleDotClick(parseInt(dot.dataset.step));
+      });
+    });
 
     // Screen: Home
     this.$('#btn-scan').addEventListener('click', () => this.openCamera());
@@ -789,7 +847,6 @@ class SnapFair {
     const note = encodeURIComponent(`SnapFair split - ${personName}`);
     let links = '';
 
-    // Revolut
     if (handles.revolut) {
       links += `<a href="https://revolut.me/${handles.revolut}"
                   target="_blank" rel="noopener noreferrer"
@@ -797,7 +854,6 @@ class SnapFair {
                   Revolut ${this.formatMoney(amount)}</a>`;
     }
 
-    // Wise
     if (handles.wise) {
       const wiseUrl = handles.wise.startsWith('http')
         ? handles.wise
@@ -808,7 +864,6 @@ class SnapFair {
                   Wise ${this.formatMoney(amount)}</a>`;
     }
 
-    // PayPal
     if (handles.paypal) {
       links += `<a href="https://paypal.me/${handles.paypal}/${amount.toFixed(2)}"
                   target="_blank" rel="noopener noreferrer"
@@ -816,7 +871,6 @@ class SnapFair {
                   PayPal ${this.formatMoney(amount)}</a>`;
     }
 
-    // Venmo
     if (handles.venmo) {
       links += `<a href="https://venmo.com/${handles.venmo}?txn=charge&amount=${amount.toFixed(2)}&note=${note}"
                   target="_blank" rel="noopener noreferrer"
@@ -824,7 +878,6 @@ class SnapFair {
                   Venmo ${this.formatMoney(amount)}</a>`;
     }
 
-    // Cash App
     if (handles.cashapp) {
       const tag = handles.cashapp.replace(/^\$/, '');
       links += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}"
@@ -833,7 +886,6 @@ class SnapFair {
                   Cash App ${this.formatMoney(amount)}</a>`;
     }
 
-    // Bank Transfer (show details, not a link)
     if (handles.bankName && handles.bankIban) {
       links += `<div class="bank-details">
                   <div>
@@ -874,7 +926,6 @@ class SnapFair {
     this.people.forEach((person, index) => {
       const breakdown = this.getPersonBreakdown(person.id);
 
-      // Build pay links
       const payLinksHtml = this.buildPayLinks(breakdown.total, person.name);
       let paySection = '';
       if (payLinksHtml) {
@@ -919,7 +970,6 @@ class SnapFair {
 
     summaryList.innerHTML = html;
 
-    // Totals check
     const subtotal = this.getSubtotal();
     const tipAmount = this.getTipAmount();
     const grandTotal = subtotal + this.tax + tipAmount;
@@ -1129,10 +1179,10 @@ class SnapFair {
     this.people = [];
     this.assignments = {};
     this.tax = 0;
-    this.tipPercent = 0;        // Changed: default tip 0
+    this.tipPercent = 0;
     this.tipCustom = 0;
     this.tipMode = 'percent';
-    // Reset tip buttons UI
+    this.currentStep = 0;
     this.$$('.tip-btn').forEach(b => b.classList.remove('active'));
     this.$('#custom-tip-row')?.classList.add('hidden');
     window.location.hash = '';
