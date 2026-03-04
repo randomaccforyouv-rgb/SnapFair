@@ -1,5 +1,5 @@
 # 🧾✂️ SnapFair
-<img width="1920" height="1080" alt="Képernyőkép 2026-03-04 001911" src="https://github.com/user-attachments/assets/660a5835-6da7-4523-836e-752d0698619d" />
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002309" src="https://github.com/user-attachments/assets/db675ef5-f3f5-4ab7-8277-66bedcf6fe7c" />
 
 **Scan a bill. Split it fairly. No app needed.**
 
@@ -31,11 +31,25 @@ If SnapFair helped you, consider buying me a coffee!
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tombuildsstuff)
 
 ## 🚀 How It Works
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002458" src="https://github.com/user-attachments/assets/7f721673-7fd5-493d-b307-7d0c61785b4c" />
 
-```text
 1. 📸 Scan or upload a photo of your bill
 2. 📝 Review and edit the detected items
+
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002550" src="https://github.com/user-attachments/assets/07102714-9b0d-400c-a154-ceb5370f852e" />
+
 3. 👥 Add the people splitting the bill
+
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002629" src="https://github.com/user-attachments/assets/162dd59f-27f9-4a2a-adc7-1d604618da7f" />
+
 4. 🍽️ Tap to assign who had what
+
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002734" src="https://github.com/user-attachments/assets/18f27981-0ca7-4854-8163-a455c2b37eba" />
+
 5. 💰 Set tax & tip
-6. 📤 Share the fair split!
+
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002810" src="https://github.com/user-attachments/assets/8499cf8b-5239-442a-9017-05ebfce3d3ab" />
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002822" src="https://github.com/user-attachments/assets/768fdb15-612b-4f43-9b87-ebcb69d1e605" />
+
+
+6. 📤 Share the fair split/pay on a given platform that is available on the site with redirect!
