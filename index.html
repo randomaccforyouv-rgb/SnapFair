@@ -17,14 +17,17 @@
   <div id="toast" class="toast" aria-live="polite"></div>
 
   <!-- PROGRESS BAR (top of screen) -->
-  <div id="step-progress" class="step-progress hidden">
-    <div class="step-dots">
-      <span class="dot active" data-step="1">1</span>
-      <span class="dot" data-step="2">2</span>
-      <span class="dot" data-step="3">3</span>
-      <span class="dot" data-step="4">4</span>
-    </div>
+<div id="step-progress" class="step-progress hidden">
+  <div class="step-dots">
+    <span class="dot active" data-step="1">1</span>
+    <span class="dot-connector" data-after="1"></span>
+    <span class="dot" data-step="2">2</span>
+    <span class="dot-connector" data-after="2"></span>
+    <span class="dot" data-step="3">3</span>
+    <span class="dot-connector" data-after="3"></span>
+    <span class="dot" data-step="4">4</span>
   </div>
+</div>
 
   <!-- ==================== SCREEN: HOME ==================== -->
   <section id="screen-home" class="screen active">
@@ -308,3 +311,4 @@
   <script src="/app.js"></script>
 </body>
 </html>
+
