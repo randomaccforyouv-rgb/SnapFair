@@ -1,14 +1,14 @@
 /* ================================================
-   SplitSnap — Full Application Logic
+   SnapFair — Full Application Logic
    ================================================ */
 
-class SplitSnap {
+class SnapFair {
   constructor() {
     this.items = [];
     this.people = [];
     this.assignments = {};     // itemId -> Set of personIds
     this.tax = 0;
-    this.tipPercent = 20;
+    this.tipPercent = 0;       // Changed: default tip 0
     this.tipCustom = 0;
     this.tipMode = 'percent';  // 'percent' | 'custom'
     this.currentScreen = 'home';
@@ -17,8 +17,8 @@ class SplitSnap {
     this.idCounter = 0;
 
     this.COLORS = [
-      '#6C5CE7', '#00CEC9', '#E17055', '#00B894',
-      '#FDCB6E', '#E84393', '#0984E3', '#D63031',
+      '#059669', '#3B82F6', '#E17055', '#22C55E',
+      '#F59E0B', '#E84393', '#0EA5E9', '#EF4444',
       '#6AB04C', '#F9CA24', '#30336B', '#22A6B3',
     ];
 
@@ -50,9 +50,18 @@ class SplitSnap {
 
   // ----- Toast -----
 
-  toast(msg, duration = 2500) {
+  toast(msg, type = 'default', duration = 2500) {
     const el = this.$('#toast');
     el.textContent = msg;
+
+    // Remove all type classes
+    el.classList.remove('toast-error', 'toast-success', 'toast-warning');
+
+    // Add type class
+    if (type === 'error') el.classList.add('toast-error');
+    if (type === 'success') el.classList.add('toast-success');
+    if (type === 'warning') el.classList.add('toast-warning');
+
     el.classList.add('show');
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => el.classList.remove('show'), duration);
@@ -104,7 +113,7 @@ class SplitSnap {
     this.$('#btn-cancel-item').addEventListener('click', () => this.hideAddItemModal());
     this.$('#btn-items-back').addEventListener('click', () => this.showScreen('home'));
     this.$('#btn-items-next').addEventListener('click', () => {
-      if (this.items.length === 0) { this.toast('Add at least one item'); return; }
+      if (this.items.length === 0) { this.toast('Add at least one item', 'warning'); return; }
       this.renderPeople();
       this.showScreen('people', 2);
     });
@@ -127,7 +136,7 @@ class SplitSnap {
       this.showScreen('items', 1);
     });
     this.$('#btn-people-next').addEventListener('click', () => {
-      if (this.people.length < 2) { this.toast('Add at least 2 people'); return; }
+      if (this.people.length < 2) { this.toast('Add at least 2 people', 'warning'); return; }
       this.saveGroupToStorage();
       this.initAssignments();
       this.renderAssignments();
@@ -145,12 +154,19 @@ class SplitSnap {
       this.showScreen('summary', 4);
     });
 
-    // Screen: Summary
+    // Screen: Summary — Back button
+    this.$('#btn-summary-back').addEventListener('click', () => {
+      this.renderAssignments();
+      this.showScreen('assign', 3);
+    });
+
+    // Screen: Summary — Tax
     this.$('#tax-input').addEventListener('input', () => {
       this.tax = parseFloat(this.$('#tax-input').value) || 0;
       this.renderSummaryTotals();
     });
 
+    // Screen: Summary — Tip buttons
     this.$$('.tip-btn').forEach(btn => {
       btn.addEventListener('click', () => this.handleTipBtn(btn));
     });
@@ -161,13 +177,21 @@ class SplitSnap {
     });
 
     // Payment handles — save to localStorage
-    ['venmo-handle', 'paypal-handle', 'cashapp-handle'].forEach(id => {
+    const paymentHandles = [
+      'paypal-handle', 'wise-handle', 'revolut-handle',
+      'venmo-handle', 'cashapp-handle',
+      'bank-name-handle', 'bank-iban-handle'
+    ];
+
+    paymentHandles.forEach(id => {
       const el = this.$(`#${id}`);
-      el.value = localStorage.getItem(`splitsnap_${id}`) || '';
-      el.addEventListener('input', () => {
-        localStorage.setItem(`splitsnap_${id}`, el.value.trim());
-        this.renderSummaryTotals();
-      });
+      if (el) {
+        el.value = localStorage.getItem(`snapfair_${id}`) || '';
+        el.addEventListener('input', () => {
+          localStorage.setItem(`snapfair_${id}`, el.value.trim());
+          this.renderSummaryTotals();
+        });
+      }
     });
 
     this.$('#btn-share').addEventListener('click', () => this.shareSplit());
@@ -199,7 +223,7 @@ class SplitSnap {
       this.showScreen('camera');
     } catch (err) {
       console.warn('Camera error:', err);
-      this.toast('Camera unavailable — try uploading a photo');
+      this.toast('📷 Camera not available — try uploading a photo instead', 'error');
       this.$('#file-input').click();
     }
   }
@@ -225,7 +249,7 @@ class SplitSnap {
       });
       this.$('#camera-feed').srcObject = this.cameraStream;
     } catch {
-      this.toast('Could not switch camera');
+      this.toast('📷 Could not switch camera', 'error');
     }
   }
 
@@ -262,7 +286,13 @@ class SplitSnap {
         const preprocessed = this.preprocessImage(canvas);
         this.processImage(preprocessed);
       };
+      img.onerror = () => {
+        this.toast('🖼️ Could not read that image — try another photo', 'error');
+      };
       img.src = ev.target.result;
+    };
+    reader.onerror = () => {
+      this.toast('🖼️ Upload failed — try again', 'error');
     };
     reader.readAsDataURL(file);
   }
@@ -275,14 +305,10 @@ class SplitSnap {
     const d = imageData.data;
 
     for (let i = 0; i < d.length; i += 4) {
-      // Luminance grayscale
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-
-      // Contrast stretch
       const contrast = 1.6;
       const mid = 128;
       const val = Math.min(255, Math.max(0, (gray - mid) * contrast + mid));
-
       d[i] = d[i + 1] = d[i + 2] = val;
     }
 
@@ -335,7 +361,7 @@ class SplitSnap {
       this.tax = parsed.tax;
 
       if (this.items.length === 0) {
-        this.toast('No items found — try manual entry');
+        this.toast('⚠️ No items found — try manual entry', 'warning');
         this.startManual();
         return;
       }
@@ -343,11 +369,11 @@ class SplitSnap {
       this.$('#tax-input').value = this.tax.toFixed(2);
       this.renderItems();
       this.showScreen('items', 1);
-      this.toast(`Found ${this.items.length} items!`);
+      this.toast(`✅ Found ${this.items.length} items!`, 'success');
 
     } catch (err) {
       console.error('OCR Error:', err);
-      this.toast('OCR failed — entering manual mode');
+      this.toast('⚠️ OCR failed — entering manual mode', 'error');
       this.startManual();
     }
   }
@@ -358,9 +384,6 @@ class SplitSnap {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     const items = [];
     let detectedTax = 0;
-
-    // Regex: find dollar amounts like 5.99, $5.99, $ 5.99
-    const priceRegex = /\$?\s*(\d{1,4}\.\d{2})\b/g;
 
     const skipWords = [
       'subtotal', 'sub total', 'total', 'balance', 'amount due',
@@ -377,11 +400,9 @@ class SplitSnap {
     for (const line of lines) {
       const lower = line.toLowerCase();
 
-      // Skip very short lines or lines with no letters
       if (line.length < 3) continue;
       if (!/[a-zA-Z]/.test(line)) continue;
 
-      // Find all prices on this line
       const prices = [];
       let match;
       const regex = /\$?\s*(\d{1,4}\.\d{2})\b/g;
@@ -391,32 +412,21 @@ class SplitSnap {
 
       if (prices.length === 0) continue;
 
-      // Use the LAST price on the line (usually the line total)
       const price = prices[prices.length - 1];
 
-      // Get item name (text before the price area)
       let name = line.substring(0, prices[0].index).trim();
-      // Clean up common OCR artifacts
       name = name.replace(/^[\d\s.#*\-]+/, '').replace(/[._*]+$/, '').trim();
 
-      // Check for tax
       if (taxWords.some(tw => lower.includes(tw))) {
         detectedTax = price.value;
         continue;
       }
 
-      // Check for tip (skip)
       if (tipWords.some(tw => lower.includes(tw))) continue;
-
-      // Skip non-item lines
       if (skipWords.some(sw => lower.includes(sw))) continue;
-
-      // Skip if price seems too high (likely a total) — heuristic
       if (price.value > 200) continue;
 
-      // Skip if no meaningful name
       if (name.length < 2) {
-        // Try using text after price
         const afterPrice = line.substring(prices[prices.length - 1].index + prices[prices.length - 1].value.toString().length + 1).trim();
         if (afterPrice.length >= 2) {
           name = afterPrice;
@@ -434,7 +444,6 @@ class SplitSnap {
       }
     }
 
-    // Simple dedup: if last item price equals sum of others, it's probably a total
     if (items.length > 1) {
       const last = items[items.length - 1];
       const sumOthers = items.slice(0, -1).reduce((s, i) => s + i.price, 0);
@@ -484,7 +493,6 @@ class SplitSnap {
       </div>
     `).join('');
 
-    // Event listeners
     list.querySelectorAll('.item-name').forEach(el => {
       el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'name', e.target.value));
     });
@@ -526,14 +534,14 @@ class SplitSnap {
     const name = this.$('#new-item-name').value.trim();
     const price = parseFloat(this.$('#new-item-price').value);
 
-    if (!name) { this.toast('Enter item name'); return; }
-    if (isNaN(price) || price <= 0) { this.toast('Enter a valid price'); return; }
+    if (!name) { this.toast('Enter item name', 'warning'); return; }
+    if (isNaN(price) || price <= 0) { this.toast('Enter a valid price', 'warning'); return; }
 
     this.items.push({ id: this.uid(), name, price });
     this.vibrate(10);
     this.hideAddItemModal();
     this.renderItems();
-    this.toast('Item added');
+    this.toast('✅ Item added', 'success');
   }
 
   // ----- People Management -----
@@ -567,9 +575,8 @@ class SplitSnap {
     const name = input.value.trim();
     if (!name) return;
 
-    // Check for duplicate
     if (this.people.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-      this.toast('Already added!');
+      this.toast('Already added!', 'warning');
       return;
     }
 
@@ -584,7 +591,6 @@ class SplitSnap {
   removePerson(id) {
     this.vibrate(10);
     this.people = this.people.filter(p => p.id !== id);
-    // Clean assignments
     for (const itemId in this.assignments) {
       this.assignments[itemId].delete(id);
     }
@@ -597,16 +603,15 @@ class SplitSnap {
   saveGroupToStorage() {
     if (this.people.length < 2) return;
     const names = this.people.map(p => p.name);
-    const saved = JSON.parse(localStorage.getItem('splitsnap_names') || '[]');
+    const saved = JSON.parse(localStorage.getItem('snapfair_names') || '[]');
     for (const n of names) {
       if (!saved.includes(n)) saved.push(n);
     }
-    // Keep last 20
-    localStorage.setItem('splitsnap_names', JSON.stringify(saved.slice(-20)));
+    localStorage.setItem('snapfair_names', JSON.stringify(saved.slice(-20)));
   }
 
   renderQuickAdd() {
-    const saved = JSON.parse(localStorage.getItem('splitsnap_names') || '[]');
+    const saved = JSON.parse(localStorage.getItem('snapfair_names') || '[]');
     const currentNames = new Set(this.people.map(p => p.name.toLowerCase()));
     const available = saved.filter(n => !currentNames.has(n.toLowerCase()));
 
@@ -676,7 +681,6 @@ class SplitSnap {
       `;
     }).join('');
 
-    // Listeners
     list.querySelectorAll('.assign-person-btn').forEach(el => {
       el.addEventListener('click', () => {
         this.vibrate(5);
@@ -720,7 +724,7 @@ class SplitSnap {
       return !a || a.size === 0;
     });
     if (unassigned.length > 0) {
-      this.toast(`Assign "${unassigned[0].name}" to someone`);
+      this.toast(`⚠️ Assign "${unassigned[0].name}" to someone`, 'warning');
       return false;
     }
     return true;
@@ -771,36 +775,110 @@ class SplitSnap {
     this.renderSummaryTotals();
   }
 
+  buildPayLinks(amount, personName) {
+    const handles = {
+      paypal:   this.$('#paypal-handle')?.value.trim() || '',
+      wise:     this.$('#wise-handle')?.value.trim() || '',
+      revolut:  this.$('#revolut-handle')?.value.trim() || '',
+      venmo:    this.$('#venmo-handle')?.value.trim() || '',
+      cashapp:  this.$('#cashapp-handle')?.value.trim() || '',
+      bankName: this.$('#bank-name-handle')?.value.trim() || '',
+      bankIban: this.$('#bank-iban-handle')?.value.trim() || '',
+    };
+
+    const note = encodeURIComponent(`SnapFair split - ${personName}`);
+    let links = '';
+
+    // Revolut
+    if (handles.revolut) {
+      links += `<a href="https://revolut.me/${handles.revolut}"
+                  target="_blank" rel="noopener noreferrer"
+                  class="pay-link revolut">
+                  Revolut ${this.formatMoney(amount)}</a>`;
+    }
+
+    // Wise
+    if (handles.wise) {
+      const wiseUrl = handles.wise.startsWith('http')
+        ? handles.wise
+        : `https://wise.com/pay/${handles.wise}`;
+      links += `<a href="${wiseUrl}"
+                  target="_blank" rel="noopener noreferrer"
+                  class="pay-link wise">
+                  Wise ${this.formatMoney(amount)}</a>`;
+    }
+
+    // PayPal
+    if (handles.paypal) {
+      links += `<a href="https://paypal.me/${handles.paypal}/${amount.toFixed(2)}"
+                  target="_blank" rel="noopener noreferrer"
+                  class="pay-link paypal">
+                  PayPal ${this.formatMoney(amount)}</a>`;
+    }
+
+    // Venmo
+    if (handles.venmo) {
+      links += `<a href="https://venmo.com/${handles.venmo}?txn=charge&amount=${amount.toFixed(2)}&note=${note}"
+                  target="_blank" rel="noopener noreferrer"
+                  class="pay-link venmo">
+                  Venmo ${this.formatMoney(amount)}</a>`;
+    }
+
+    // Cash App
+    if (handles.cashapp) {
+      const tag = handles.cashapp.replace(/^\$/, '');
+      links += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}"
+                  target="_blank" rel="noopener noreferrer"
+                  class="pay-link cashapp">
+                  Cash App ${this.formatMoney(amount)}</a>`;
+    }
+
+    // Bank Transfer (show details, not a link)
+    if (handles.bankName && handles.bankIban) {
+      links += `<div class="bank-details">
+                  <div>
+                    <span class="bank-label">Name: </span>
+                    <span class="bank-value">${this.escapeHtml(handles.bankName)}</span>
+                  </div>
+                  <div>
+                    <span class="bank-label">IBAN: </span>
+                    <span class="bank-value" onclick="app.copyIBAN(this)">${this.escapeHtml(handles.bankIban)}</span>
+                  </div>
+                </div>`;
+    }
+
+    return links;
+  }
+
+  copyIBAN(el) {
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      this.toast('📋 IBAN copied!', 'success');
+    }).catch(() => {
+      const range = document.createRange();
+      range.selectNode(el);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+      document.execCommand('copy');
+      window.getSelection().removeAllRanges();
+      this.toast('📋 IBAN copied!', 'success');
+    });
+  }
+
   renderSummaryTotals() {
     this.tax = parseFloat(this.$('#tax-input').value) || 0;
 
     const summaryList = this.$('#summary-list');
-    const venmoHandle = this.$('#venmo-handle').value.trim();
-    const paypalHandle = this.$('#paypal-handle').value.trim();
-    const cashappHandle = this.$('#cashapp-handle').value.trim();
 
     let html = '';
 
     this.people.forEach((person, index) => {
       const breakdown = this.getPersonBreakdown(person.id);
-      const note = encodeURIComponent(`SplitSnap: Dinner split`);
 
-      let payLinksHtml = '';
-      if (venmoHandle || paypalHandle || cashappHandle) {
-        payLinksHtml = '<div class="summary-pay-links">';
-        if (venmoHandle) {
-          payLinksHtml += `<a href="https://venmo.com/${venmoHandle}?txn=charge&amount=${breakdown.total.toFixed(2)}&note=${note}" 
-                            target="_blank" class="pay-link venmo">Venmo ${this.formatMoney(breakdown.total)}</a>`;
-        }
-        if (paypalHandle) {
-          payLinksHtml += `<a href="https://paypal.me/${paypalHandle}/${breakdown.total.toFixed(2)}" 
-                            target="_blank" class="pay-link paypal">PayPal ${this.formatMoney(breakdown.total)}</a>`;
-        }
-        if (cashappHandle) {
-          payLinksHtml += `<a href="https://cash.app/$${cashappHandle}/${breakdown.total.toFixed(2)}" 
-                            target="_blank" class="pay-link cashapp">Cash App ${this.formatMoney(breakdown.total)}</a>`;
-        }
-        payLinksHtml += '</div>';
+      // Build pay links
+      const payLinksHtml = this.buildPayLinks(breakdown.total, person.name);
+      let paySection = '';
+      if (payLinksHtml) {
+        paySection = `<div class="summary-pay-links">${payLinksHtml}</div>`;
       }
 
       html += `
@@ -834,7 +912,7 @@ class SplitSnap {
               </div>
             ` : ''}
           </div>
-          ${payLinksHtml}
+          ${paySection}
         </div>
       `;
     });
@@ -877,27 +955,25 @@ class SplitSnap {
     const text = this.buildSummaryText();
     const shareData = this.buildShareableData();
 
-    // Try Web Share API first
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'SplitSnap — Bill Split',
+          title: 'SnapFair — Bill Split',
           text: text,
           url: shareData.url
         });
-        this.toast('Shared!');
+        this.toast('📤 Shared!', 'success');
         return;
       } catch (err) {
         if (err.name === 'AbortError') return;
       }
     }
 
-    // Fallback: copy link
     try {
       await navigator.clipboard.writeText(shareData.url + '\n\n' + text);
-      this.toast('Link & summary copied!');
+      this.toast('📋 Link & summary copied!', 'success');
     } catch {
-      this.toast('Could not share');
+      this.toast('Could not share', 'error');
     }
   }
 
@@ -905,23 +981,22 @@ class SplitSnap {
     const text = this.buildSummaryText();
     try {
       await navigator.clipboard.writeText(text);
-      this.toast('Summary copied!');
+      this.toast('📋 Summary copied!', 'success');
     } catch {
-      // Fallback
       const ta = document.createElement('textarea');
       ta.value = text;
       document.body.appendChild(ta);
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      this.toast('Summary copied!');
+      this.toast('📋 Summary copied!', 'success');
     }
   }
 
   buildSummaryText() {
     const subtotal = this.getSubtotal();
     const tipAmount = this.getTipAmount();
-    const lines = ['🧾 SplitSnap — Bill Split\n'];
+    const lines = ['🧾 SnapFair — Bill Split\n'];
 
     this.people.forEach(person => {
       const bd = this.getPersonBreakdown(person.id);
@@ -969,7 +1044,6 @@ class SplitSnap {
       const json = decodeURIComponent(escape(atob(encoded)));
       const data = JSON.parse(json);
 
-      // Reconstruct state
       this.people = data.p.map(p => ({ id: p.id, name: p.n }));
 
       this.items = data.i.map((item, idx) => {
@@ -977,7 +1051,6 @@ class SplitSnap {
         return { id, name: item.n, price: item.p, _assignees: item.a };
       });
 
-      // Build assignment map — need to map old person IDs
       this.assignments = {};
       this.items.forEach((item, idx) => {
         const original = data.i[idx];
@@ -989,10 +1062,9 @@ class SplitSnap {
       if (this.tipMode === 'custom') {
         this.tipCustom = data.tp || 0;
       } else {
-        this.tipPercent = data.tp || 20;
+        this.tipPercent = data.tp || 0;
       }
 
-      // Render shared view
       this.renderSharedView();
       this.showScreen('shared');
       return true;
@@ -1057,9 +1129,12 @@ class SplitSnap {
     this.people = [];
     this.assignments = {};
     this.tax = 0;
-    this.tipPercent = 20;
+    this.tipPercent = 0;        // Changed: default tip 0
     this.tipCustom = 0;
     this.tipMode = 'percent';
+    // Reset tip buttons UI
+    this.$$('.tip-btn').forEach(b => b.classList.remove('active'));
+    this.$('#custom-tip-row')?.classList.add('hidden');
     window.location.hash = '';
     this.showScreen('home');
   }
@@ -1087,5 +1162,5 @@ class SplitSnap {
 
 // ----- Launch -----
 document.addEventListener('DOMContentLoaded', () => {
-  window.app = new SplitSnap();
+  window.app = new SnapFair();
 });
