@@ -1,20 +1,24 @@
 {
-  "name": "SplitSnap — Scan & Split Bills",
-  "short_name": "SplitSnap",
-  "description": "Scan any restaurant bill, assign items to friends, and split it fairly.",
+  "name": "SnapFair — Split Bills Fairly",
+  "short_name": "SnapFair",
+  "description": "Scan a bill. Split it fairly. No app needed.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F0F0F8",
-  "theme_color": "#6C5CE7",
+  "background_color": "#F7F8FA",
+  "theme_color": "#059669",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%236C5CE7' width='100' height='100' rx='20'/><text y='.88em' x='.12em' font-size='75'>🧾</text></svg>",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
-  ],
-  "categories": ["finance", "utilities"],
-  "lang": "en"
+  ]
 }
