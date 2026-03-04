@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>SnapFair — Scan & Split Bills Instantly</title>
   <meta name="description" content="Snap a photo of any bill, assign items, split fairly. No app download needed.">
-  <meta name="theme-color" content="#6C5CE7">
+  <meta name="theme-color" content="#059669">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -49,15 +49,15 @@
       <input type="file" id="file-input" accept="image/*" hidden>
     </div>
     <div class="home-footer">
-  <p>100% free · No signup · Works offline</p>
-  <a href="https://ko-fi.com/tombuildsstuff"
-     target="_blank"
-     rel="noopener noreferrer"
-     class="kofi-link">
-    <span class="kofi-icon">☕</span>
-    Buy me a coffee
-  </a>
-</div>
+      <p>100% free · No signup · Works offline</p>
+      <a href="https://ko-fi.com/tombuildsstuff"
+         target="_blank"
+         rel="noopener noreferrer"
+         class="kofi-link">
+        <span class="kofi-icon">☕</span>
+        Buy me a coffee
+      </a>
+    </div>
   </section>
 
   <!-- ==================== SCREEN: CAMERA ==================== -->
@@ -168,10 +168,11 @@
         <div class="field">
           <label for="tip-mode">Tip</label>
           <div class="tip-toggle">
-            <button class="tip-btn active" data-tip="15">15%</button>
+            <button class="tip-btn" data-tip="0">0%</button>
+            <button class="tip-btn" data-tip="10">10%</button>
+            <button class="tip-btn" data-tip="15">15%</button>
             <button class="tip-btn" data-tip="18">18%</button>
             <button class="tip-btn" data-tip="20">20%</button>
-            <button class="tip-btn" data-tip="25">25%</button>
             <button class="tip-btn" data-tip="custom">$</button>
           </div>
         </div>
@@ -182,22 +183,52 @@
       </div>
     </div>
 
+    <!-- UPDATED PAYMENT SECTION -->
     <div class="payment-info-section">
       <details>
         <summary>💳 Your payment handle (for request links)</summary>
         <div class="payment-fields">
-          <div class="field">
-            <label>Venmo @</label>
-            <input id="venmo-handle" type="text" placeholder="username" class="input">
-          </div>
+
+          <!-- Global -->
+          <div class="payment-group-label">🌍 Global</div>
           <div class="field">
             <label>PayPal.me/</label>
             <input id="paypal-handle" type="text" placeholder="username" class="input">
           </div>
           <div class="field">
+            <label>Wise wise.com/pay/</label>
+            <input id="wise-handle" type="text" placeholder="username or link" class="input">
+          </div>
+
+          <!-- Europe -->
+          <div class="payment-group-label">🇪🇺 Europe</div>
+          <div class="field">
+            <label>Revolut revolut.me/</label>
+            <input id="revolut-handle" type="text" placeholder="username" class="input">
+          </div>
+
+          <!-- US -->
+          <div class="payment-group-label">🇺🇸 US</div>
+          <div class="field">
+            <label>Venmo @</label>
+            <input id="venmo-handle" type="text" placeholder="username" class="input">
+          </div>
+          <div class="field">
             <label>Cash App $</label>
             <input id="cashapp-handle" type="text" placeholder="cashtag" class="input">
           </div>
+
+          <!-- Bank Transfer -->
+          <div class="payment-group-label">🏦 Bank Transfer</div>
+          <div class="field">
+            <label>Account holder name</label>
+            <input id="bank-name-handle" type="text" placeholder="Your Name" class="input">
+          </div>
+          <div class="field">
+            <label>IBAN</label>
+            <input id="bank-iban-handle" type="text" placeholder="HU42 1234 5678 9012 3456 7890 1234" class="input">
+          </div>
+
         </div>
       </details>
     </div>
@@ -226,9 +257,24 @@
       <button id="btn-copy-summary" class="btn btn-secondary btn-block">
         📋 Copy as Text
       </button>
+      <button id="btn-summary-back" class="btn btn-outline btn-block">
+        ← Back to Assignments
+      </button>
       <button id="btn-new-split" class="btn btn-outline btn-block">
         🔄 New Split
       </button>
+    </div>
+
+    <!-- Ko-fi support after split -->
+    <div class="support-prompt">
+      <p>Enjoyed SnapFair? It's free forever.</p>
+      <a href="https://ko-fi.com/tombuildsstuff"
+         target="_blank"
+         rel="noopener noreferrer"
+         class="kofi-link">
+        <span class="kofi-icon">☕</span>
+        Buy me a coffee
+      </a>
     </div>
   </section>
 
@@ -237,17 +283,6 @@
     <div class="screen-header">
       <h2>💰 Your Split</h2>
       <p class="text-muted">Someone shared a bill split with you</p>
-      <div class="support-prompt">
-  <p>Enjoyed SnapFair? It's free forever.</p>
-  <a href="https://ko-fi.com/tombuildsstuff"
-     target="_blank"
-     rel="noopener noreferrer"
-     class="kofi-link">
-    <span class="kofi-icon">☕</span>
-    Buy me a coffee
-  </a>
-</div>
-
     </div>
     <div id="shared-summary" class="summary-list"></div>
     <div id="shared-totals" class="totals-check"></div>
@@ -256,11 +291,20 @@
         🧾 Split Your Own Bill
       </button>
     </div>
+    <!-- Ko-fi support on shared view -->
+    <div class="support-prompt">
+      <p>Enjoyed SnapFair? It's free forever.</p>
+      <a href="https://ko-fi.com/tombuildsstuff"
+         target="_blank"
+         rel="noopener noreferrer"
+         class="kofi-link">
+        <span class="kofi-icon">☕</span>
+        Buy me a coffee
+      </a>
+    </div>
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="/app.js"></script>
 </body>
-
 </html>
-
