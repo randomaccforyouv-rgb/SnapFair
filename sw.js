@@ -1,4 +1,5 @@
-const CACHE_NAME = 'splitsnap-v1';
+const CACHE_NAME = 'snapfair-v1';
+
 const ASSETS = [
   '/',
   '/index.html',
@@ -7,10 +8,12 @@ const ASSETS = [
   '/manifest.json'
 ];
 
-// Install — cache core assets
+// Install — cache core files
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(ASSETS);
+    })
   );
   self.skipWaiting();
 });
@@ -18,41 +21,42 @@ self.addEventListener('install', event => {
 // Activate — clean old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+    caches.keys().then(keys => {
+      return Promise.all(
+        keys
+          .filter(key => key !== CACHE_NAME)
+          .map(key => caches.delete(key))
+      );
+    })
   );
   self.clients.claim();
 });
 
-// Fetch — network first, fallback to cache
+// Fetch — serve from cache, fallback to network
 self.addEventListener('fetch', event => {
-  // Skip non-GET and cross-origin
+  // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // For CDN resources (Tesseract), use cache-first
-  if (event.request.url.includes('cdn.jsdelivr.net')) {
-    event.respondWith(
-      caches.match(event.request).then(cached => {
-        if (cached) return cached;
-        return fetch(event.request).then(response => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          return response;
-        });
-      })
-    );
-    return;
-  }
+  // Skip external requests (like Tesseract CDN)
+  if (!event.request.url.startsWith(self.location.origin)) return;
 
-  // For own assets — network first, cache fallback
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(event.request).then(cached => {
+      // Return cached version, but also update cache in background
+      const fetchPromise = fetch(event.request)
+        .then(response => {
+          // Only cache valid responses
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        })
+        .catch(() => cached); // If offline, use cached
+
+      return cached || fetchPromise;
+    })
   );
 });
