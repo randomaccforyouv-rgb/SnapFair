@@ -4,13 +4,125 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="google-site-verification" content="daFGr07fsivcPrzHbFO61otWaV7iFfPnVLzd7YHmr_M" />
-  <title>SnapFair — Scan & Split Bills Instantly</title>
-  <meta name="description" content="Snap a photo of any bill, assign items, split fairly. No app download needed.">
+
+  <!-- SEO -->
+  <title>SnapFair — Scan a Bill, Split It Fairly | Free Receipt Splitter</title>
+  <meta name="description" content="Split any restaurant bill in seconds. Snap a photo of your receipt, assign items to people, and share who owes what — including tax and tip. Free, no app download, no signup.">
+  <meta name="keywords" content="bill splitter, split the bill, receipt scanner, split restaurant bill, bill splitting app, split check, divide bill, receipt splitter, fair bill split, tip calculator, group dinner split">
+  <link rel="canonical" href="https://snapfair.pages.dev/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="SnapFair — Scan a Bill, Split It Fairly">
+  <meta property="og:description" content="Snap a photo of your receipt, assign items, split tax & tip fairly. Free, private, no app needed.">
+  <meta property="og:url" content="https://snapfair.pages.dev/">
+  <meta property="og:image" content="https://snapfair.pages.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="SnapFair">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SnapFair — Scan a Bill, Split It Fairly">
+  <meta name="twitter:description" content="Snap a photo of your receipt, assign items, split tax & tip fairly. Free, private, no app needed.">
+  <meta name="twitter:image" content="https://snapfair.pages.dev/og-image.png">
+
+  <!-- App / Icons -->
   <meta name="theme-color" content="#059669">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SnapFair">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
+
+  <!-- Schema: WebApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "SnapFair",
+    "headline": "Scan a Bill, Split It Fairly",
+    "description": "Free browser-based bill splitting tool. Scan your receipt with AI, assign items to people, split tax and tip proportionally, and share payment links via Venmo, PayPal, Cash App, Revolut, or Wise.",
+    "url": "https://snapfair.pages.dev",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Any",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "AI-powered receipt scanning",
+      "Camera and photo upload support",
+      "Manual item entry",
+      "Proportional tax and tip splitting",
+      "Venmo, PayPal, Cash App, Revolut, and Wise payment links",
+      "Share and copy-to-clipboard",
+      "Dark mode",
+      "Mobile-first design",
+      "No signup required",
+      "Fully private — no data sent to servers"
+    ],
+    "screenshot": "https://snapfair.pages.dev/og-image.png",
+    "author": {
+      "@type": "Person",
+      "name": "Tom"
+    }
+  }
+  </script>
+
+  <!-- Schema: FAQ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is SnapFair really free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, SnapFair is completely free with no signup, no downloads, and no hidden fees. It runs entirely in your browser."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does SnapFair store my receipt data?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Everything runs locally in your browser. No receipt images or personal data are ever sent to any server."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does the receipt scanning work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SnapFair uses AI-powered OCR to automatically read item names and prices from a photo of your receipt. You can snap a photo with your camera or upload one from your gallery."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I split tax and tip fairly?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. SnapFair splits tax and tip proportionally based on what each person ordered, so everyone pays their fair share."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need to download an app?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. SnapFair works entirely in your phone or computer browser. No app store download needed."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <!-- CSS -->
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -18,17 +130,17 @@
   <div id="toast" class="toast" aria-live="polite"></div>
 
   <!-- PROGRESS BAR (top of screen) -->
-<div id="step-progress" class="step-progress hidden">
-  <div class="step-dots">
-    <span class="dot active" data-step="1">1</span>
-    <span class="dot-connector" data-after="1"></span>
-    <span class="dot" data-step="2">2</span>
-    <span class="dot-connector" data-after="2"></span>
-    <span class="dot" data-step="3">3</span>
-    <span class="dot-connector" data-after="3"></span>
-    <span class="dot" data-step="4">4</span>
+  <div id="step-progress" class="step-progress hidden">
+    <div class="step-dots">
+      <span class="dot active" data-step="1">1</span>
+      <span class="dot-connector" data-after="1"></span>
+      <span class="dot" data-step="2">2</span>
+      <span class="dot-connector" data-after="2"></span>
+      <span class="dot" data-step="3">3</span>
+      <span class="dot-connector" data-after="3"></span>
+      <span class="dot" data-step="4">4</span>
+    </div>
   </div>
-</div>
 
   <!-- ==================== SCREEN: HOME ==================== -->
   <section id="screen-home" class="screen active">
@@ -187,7 +299,7 @@
       </div>
     </div>
 
-    <!-- UPDATED PAYMENT SECTION -->
+    <!-- PAYMENT SECTION -->
     <div class="payment-info-section">
       <details>
         <summary>💳 Your payment handle (for request links)</summary>
@@ -312,6 +424,3 @@
   <script src="/app.js"></script>
 </body>
 </html>
-
-
-
