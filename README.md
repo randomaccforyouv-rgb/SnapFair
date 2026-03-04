@@ -24,6 +24,12 @@ SnapFair is a free, browser-based bill-splitting tool. Just snap a photo of your
 
 ---
 
+## ☕ Support
+
+If SnapFair helped you, consider buying me a coffee!
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tombuildsstuff)
+
 ## 🚀 How It Works
 
 ```text
@@ -33,10 +39,3 @@ SnapFair is a free, browser-based bill-splitting tool. Just snap a photo of your
 4. 🍽️ Tap to assign who had what
 5. 💰 Set tax & tip
 6. 📤 Share the fair split!
-
-
-## ☕ Support
-
-If SnapFair helped you, consider buying me a coffee!
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tombuildsstuff)
