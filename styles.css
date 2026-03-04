@@ -116,17 +116,51 @@ body {
   background: var(--border);
   color: var(--text-muted);
   transition: all 0.3s ease;
+  /* Not clickable by default (future steps) */
+  cursor: default;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .dot.active {
   background: var(--primary);
   color: white;
   box-shadow: 0 2px 12px var(--primary-glow);
+  cursor: default;
 }
 
 .dot.done {
   background: var(--success);
   color: white;
+  /* Clickable! */
+  cursor: pointer;
+}
+
+.dot.done:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 12px rgba(34, 197, 94, 0.4);
+}
+
+.dot.done:active {
+  transform: scale(0.95);
+}
+
+/* Connector lines between dots */
+.step-dots {
+  position: relative;
+}
+
+.dot-connector {
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  align-self: center;
+  transition: background 0.3s ease;
+}
+
+.dot-connector.done {
+  background: var(--success);
 }
 
 /* ============ HOME SCREEN ============ */
@@ -1131,3 +1165,4 @@ body {
     border-color: var(--border);
   }
 }
+
