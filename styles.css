@@ -723,6 +723,7 @@ body {
   color: white;
 }
 
+/* ============ PAYMENT INFO ============ */
 .payment-info-section {
   margin-bottom: 16px;
 }
@@ -752,6 +753,26 @@ body {
 .payment-fields .field { margin-bottom: 0; }
 .payment-fields .input { padding: 10px 14px; font-size: 14px; }
 
+/* ============ PAYMENT GROUP LABELS ============ */
+.payment-group-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-top: 16px;
+  margin-bottom: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.payment-group-label:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* ============ SUMMARY CARDS ============ */
 .summary-list {
   display: flex;
   flex-direction: column;
@@ -816,12 +837,14 @@ body {
   font-style: italic;
 }
 
+/* ============ PAY LINKS ============ */
 .summary-pay-links {
   padding: 12px 20px;
   background: var(--primary-ghost);
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .pay-link {
@@ -836,10 +859,45 @@ body {
   transition: transform 0.15s;
 }
 .pay-link:active { transform: scale(0.95); }
-.pay-link.venmo { background: #3D95CE; color: white; }
-.pay-link.paypal { background: #0070BA; color: white; }
-.pay-link.cashapp { background: #00C244; color: white; }
 
+.pay-link.venmo   { background: #3D95CE; color: white; }
+.pay-link.paypal  { background: #0070BA; color: white; }
+.pay-link.cashapp { background: #00C244; color: white; }
+.pay-link.wise    { background: #9FE870; color: #163300; }
+.pay-link.revolut { background: #0075EB; color: white; }
+.pay-link.bank    { background: var(--text-secondary); color: white; }
+
+/* ============ BANK DETAILS DISPLAY ============ */
+.bank-details {
+  background: var(--card-hover);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  width: 100%;
+}
+
+.bank-details .bank-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.bank-details .bank-value {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  user-select: all;
+  cursor: pointer;
+}
+
+/* ============ TOTALS ============ */
 .totals-check {
   background: var(--card);
   border-radius: var(--radius);
@@ -937,7 +995,6 @@ body {
   z-index: 400;
   transition: transform 0.3s ease;
   white-space: nowrap;
-  /* Hardcoded so it works in BOTH light & dark mode */
   background: #1F2937;
   color: #FFFFFF;
   box-shadow: 0 8px 32px rgba(0,0,0,0.25);
@@ -1002,6 +1059,7 @@ body {
 .kofi-link:active { transform: scale(0.97); }
 .kofi-icon { font-size: 16px; line-height: 1; }
 
+/* ============ SUPPORT PROMPT ============ */
 .support-prompt {
   text-align: center;
   padding: 24px 16px;
@@ -1066,5 +1124,10 @@ body {
 
   .assign-everyone.all-assigned {
     background: rgba(34, 197, 94, 0.1);
+  }
+
+  .bank-details {
+    background: rgba(16, 185, 129, 0.05);
+    border-color: var(--border);
   }
 }
