@@ -31,9 +31,11 @@ If SnapFair helped you, consider buying me a coffee!
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tombuildsstuff)
 
 ## 🚀 How It Works
-<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002458" src="https://github.com/user-attachments/assets/7f721673-7fd5-493d-b307-7d0c61785b4c" />
 
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002309" src="https://github.com/user-attachments/assets/db675ef5-f3f5-4ab7-8277-66bedcf6fe7c" />
 1. 📸 Scan or upload a photo of your bill
+
+<img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002458" src="https://github.com/user-attachments/assets/7f721673-7fd5-493d-b307-7d0c61785b4c" />
 2. 📝 Review and edit the detected items
 
 <img width="1920" height="1080" alt="Képernyőkép 2026-03-05 002550" src="https://github.com/user-attachments/assets/07102714-9b0d-400c-a154-ceb5370f852e" />
