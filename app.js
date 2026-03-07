@@ -1,5 +1,6 @@
 /* ================================================
-   SnapFair — Full App with Fixed OCR + QR Escrow
+   SnapFair — Complete App
+   Fixed OCR + QR Escrow + Optimized
    ================================================ */
 
 class SnapFair {
@@ -16,7 +17,7 @@ class SnapFair {
     this.cameraStream = null;
     this.facingMode = 'environment';
     this.idCounter = 0;
-    this.escrowTokens = {}; // personId -> { code, status }
+    this.escrowTokens = {};
 
     this.COLORS = [
       '#059669','#3B82F6','#E17055','#22C55E',
@@ -27,7 +28,9 @@ class SnapFair {
     this.init();
   }
 
-  // ───── Utilities ─────
+  // ═══════════════════════════════════════
+  //  UTILITIES
+  // ═══════════════════════════════════════
 
   uid() { return '_' + (++this.idCounter) + '_' + Math.random().toString(36).slice(2, 8); }
   $(sel) { return document.querySelector(sel); }
@@ -47,7 +50,9 @@ class SnapFair {
     return str.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
   }
 
-  // ───── Toast ─────
+  // ═══════════════════════════════════════
+  //  TOAST
+  // ═══════════════════════════════════════
 
   toast(msg, type = 'default', duration = 2500) {
     const el = this.$('#toast');
@@ -58,7 +63,9 @@ class SnapFair {
     this._toastTimer = setTimeout(() => el.classList.remove('show'), duration);
   }
 
-  // ───── Screens ─────
+  // ═══════════════════════════════════════
+  //  SCREEN NAVIGATION
+  // ═══════════════════════════════════════
 
   showScreen(name, step = null) {
     this.$$('.screen').forEach(s => s.classList.remove('active'));
@@ -107,10 +114,12 @@ class SnapFair {
     }
   }
 
-  // ───── Init ─────
+  // ═══════════════════════════════════════
+  //  INIT — WIRE UP ALL EVENTS
+  // ═══════════════════════════════════════
 
   init() {
-    // Check for shared split or payment request in URL
+    // Check URL hash for shared data
     if (this.loadPaymentRequest()) return;
     if (this.loadSharedSplit()) return;
 
@@ -148,7 +157,10 @@ class SnapFair {
     this.$('#btn-people-back').addEventListener('click', () => { this.renderItems(); this.showScreen('items', 1); });
     this.$('#btn-people-next').addEventListener('click', () => {
       if (this.people.length < 2) { this.toast('Add at least 2 people', 'warning'); return; }
-      this.saveGroupToStorage(); this.initAssignments(); this.renderAssignments(); this.showScreen('assign', 3);
+      this.saveGroupToStorage();
+      this.initAssignments();
+      this.renderAssignments();
+      this.showScreen('assign', 3);
     });
 
     // Assign
@@ -160,26 +172,36 @@ class SnapFair {
 
     // Summary
     this.$('#btn-summary-back').addEventListener('click', () => { this.renderAssignments(); this.showScreen('assign', 3); });
-    this.$('#tax-input').addEventListener('input', () => { this.tax = parseFloat(this.$('#tax-input').value) || 0; this.renderSummaryTotals(); });
+    this.$('#tax-input').addEventListener('input', () => {
+      this.tax = parseFloat(this.$('#tax-input').value) || 0;
+      this.renderSummaryTotals();
+    });
     this.$$('.tip-btn').forEach(btn => btn.addEventListener('click', () => this.handleTipBtn(btn)));
-    this.$('#custom-tip-input').addEventListener('input', () => { this.tipCustom = parseFloat(this.$('#custom-tip-input').value) || 0; this.renderSummaryTotals(); });
+    this.$('#custom-tip-input').addEventListener('input', () => {
+      this.tipCustom = parseFloat(this.$('#custom-tip-input').value) || 0;
+      this.renderSummaryTotals();
+    });
 
-    // Payment handles — persist
-    ['paypal-handle','wise-handle','revolut-handle','venmo-handle','cashapp-handle','bank-name-handle','bank-iban-handle'].forEach(id => {
+    // Payment handles — persist to localStorage
+    const handleIds = ['paypal-handle','wise-handle','revolut-handle','venmo-handle','cashapp-handle','bank-name-handle','bank-iban-handle'];
+    handleIds.forEach(id => {
       const el = this.$(`#${id}`);
       if (!el) return;
       el.value = localStorage.getItem(`snapfair_${id}`) || '';
-      el.addEventListener('input', () => { localStorage.setItem(`snapfair_${id}`, el.value.trim()); this.renderSummaryTotals(); });
+      el.addEventListener('input', () => {
+        localStorage.setItem(`snapfair_${id}`, el.value.trim());
+        this.renderSummaryTotals();
+      });
     });
 
     this.$('#btn-share').addEventListener('click', () => this.shareSplit());
     this.$('#btn-copy-summary').addEventListener('click', () => this.copySummary());
     this.$('#btn-new-split').addEventListener('click', () => this.resetApp());
 
-    // Shared screen
+    // Shared view
     this.$('#btn-shared-new')?.addEventListener('click', () => { window.location.hash = ''; this.resetApp(); });
 
-    // Payment request screen
+    // Payment request view
     this.$('#btn-payreq-new')?.addEventListener('click', () => { window.location.hash = ''; this.resetApp(); });
 
     this.renderQuickAdd();
@@ -203,18 +225,23 @@ class SnapFair {
         },
         audio: false
       });
-      this.$('#camera-feed').srcObject = this.cameraStream;
+      const video = this.$('#camera-feed');
+      video.srcObject = this.cameraStream;
+      await video.play();
       this.showScreen('camera');
-      console.log(`Camera: ${this.$('#camera-feed').videoWidth}x${this.$('#camera-feed').videoHeight}`);
+      console.log(`Camera: ${video.videoWidth}x${video.videoHeight}`);
     } catch (err) {
       console.warn('Camera error:', err);
-      this.toast('📷 Camera not available — try uploading a photo', 'error');
+      this.toast('📷 Camera not available — try uploading', 'error');
       this.$('#file-input').click();
     }
   }
 
   closeCamera() {
-    if (this.cameraStream) { this.cameraStream.getTracks().forEach(t => t.stop()); this.cameraStream = null; }
+    if (this.cameraStream) {
+      this.cameraStream.getTracks().forEach(t => t.stop());
+      this.cameraStream = null;
+    }
     this.$('#camera-feed').srcObject = null;
     this.showScreen('home');
   }
@@ -224,7 +251,8 @@ class SnapFair {
     if (this.cameraStream) this.cameraStream.getTracks().forEach(t => t.stop());
     try {
       this.cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: this.facingMode, width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false
+        video: { facingMode: this.facingMode, width: { ideal: 3840 }, height: { ideal: 2160 } },
+        audio: false
       });
       this.$('#camera-feed').srcObject = this.cameraStream;
     } catch { this.toast('Could not switch camera', 'error'); }
@@ -255,7 +283,8 @@ class SnapFair {
       const img = new Image();
       img.onload = () => {
         const c = document.createElement('canvas');
-        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
         c.getContext('2d').drawImage(img, 0, 0);
         const processed = this.preprocessImage(c);
         this.processImage(processed);
@@ -268,30 +297,30 @@ class SnapFair {
   }
 
   // ═══════════════════════════════════════
-  //  IMAGE PREPROCESSING  (THE KEY FIX)
+  //  IMAGE PREPROCESSING  (KEY OCR FIX)
   // ═══════════════════════════════════════
 
   preprocessImage(sourceCanvas) {
     let w = sourceCanvas.width;
     let h = sourceCanvas.height;
     const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
-    let imgData = ctx.getImageData(0, 0, w, h);
-    let d = imgData.data;
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
 
-    // ── 1. Grayscale ──
+    // 1. Grayscale
     for (let i = 0; i < d.length; i += 4) {
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
       d[i] = d[i + 1] = d[i + 2] = gray;
     }
 
-    // ── 2. Contrast boost ──
+    // 2. Contrast boost
     const factor = 1.8;
     for (let i = 0; i < d.length; i += 4) {
       let v = factor * (d[i] - 128) + 128;
       d[i] = d[i + 1] = d[i + 2] = Math.max(0, Math.min(255, v));
     }
 
-    // ── 3. Otsu's binarization ──
+    // 3. Otsu's binarization
     const histogram = new Array(256).fill(0);
     for (let i = 0; i < d.length; i += 4) histogram[d[i]]++;
 
@@ -319,20 +348,22 @@ class SnapFair {
 
     ctx.putImageData(imgData, 0, 0);
 
-    // ── 4. Upscale if too small (OCR needs ~300 DPI) ──
+    // 4. Upscale small images
     let outCanvas = sourceCanvas;
     if (w < 1500) {
       const scale = Math.ceil(1500 / w);
       const up = document.createElement('canvas');
-      up.width = w * scale; up.height = h * scale;
+      up.width = w * scale;
+      up.height = h * scale;
       const uctx = up.getContext('2d');
       uctx.imageSmoothingEnabled = false;
       uctx.drawImage(sourceCanvas, 0, 0, up.width, up.height);
       outCanvas = up;
-      w = up.width; h = up.height;
+      w = up.width;
+      h = up.height;
     }
 
-    // ── 5. White border padding (helps Tesseract) ──
+    // 5. White border padding (helps Tesseract)
     const pad = 30;
     const bordered = document.createElement('canvas');
     bordered.width = w + pad * 2;
@@ -346,7 +377,7 @@ class SnapFair {
   }
 
   // ═══════════════════════════════════════
-  //  OCR (Tesseract)
+  //  OCR PROCESSING
   // ═══════════════════════════════════════
 
   async processImage(canvas) {
@@ -361,17 +392,29 @@ class SnapFair {
     try {
       const worker = await Tesseract.createWorker('eng', 1, {
         logger: m => {
-          if (m.status === 'loading tesseract core') { statusEl.textContent = 'Loading OCR engine…'; progressEl.style.width = '10%'; }
-          else if (m.status === 'initializing tesseract') { statusEl.textContent = 'Initializing…'; progressEl.style.width = '20%'; }
-          else if (m.status === 'loading language traineddata') { statusEl.textContent = 'Loading language data…'; detailEl.textContent = 'First time may take a moment'; progressEl.style.width = '30%'; }
-          else if (m.status === 'initializing api') { statusEl.textContent = 'Almost ready…'; progressEl.style.width = '50%'; }
-          else if (m.status === 'recognizing text') { statusEl.textContent = 'Reading your receipt…'; detailEl.textContent = `${Math.round(m.progress * 100)}% complete`; progressEl.style.width = `${50 + m.progress * 50}%`; }
+          if (m.status === 'loading tesseract core') {
+            statusEl.textContent = 'Loading OCR engine…';
+            progressEl.style.width = '10%';
+          } else if (m.status === 'initializing tesseract') {
+            statusEl.textContent = 'Initializing…';
+            progressEl.style.width = '20%';
+          } else if (m.status === 'loading language traineddata') {
+            statusEl.textContent = 'Loading language data…';
+            detailEl.textContent = 'First time may take a moment';
+            progressEl.style.width = '30%';
+          } else if (m.status === 'initializing api') {
+            statusEl.textContent = 'Almost ready…';
+            progressEl.style.width = '50%';
+          } else if (m.status === 'recognizing text') {
+            statusEl.textContent = 'Reading your receipt…';
+            detailEl.textContent = `${Math.round(m.progress * 100)}% complete`;
+            progressEl.style.width = `${50 + m.progress * 50}%`;
+          }
         }
       });
 
-      // Set optimized parameters for receipts
       await worker.setParameters({
-        tessedit_pageseg_mode: '6',         // Uniform text block
+        tessedit_pageseg_mode: '6',
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789$.,/()-+#@&\' ',
       });
 
@@ -406,7 +449,6 @@ class SnapFair {
   // ═══════════════════════════════════════
 
   parseReceipt(text) {
-    // Clean up common OCR mistakes
     const cleaned = text
       .replace(/[|]/g, 'I')
       .replace(/[{}[\]]/g, '')
@@ -424,9 +466,8 @@ class SnapFair {
       if (line.length < 3) continue;
       if (!/[a-zA-Z]/.test(line)) continue;
       if (/^[-=*_#.~]{3,}$/.test(line.replace(/\s/g, ''))) continue;
-      if (/^\d[\d\s/:.\-,]+$/.test(line)) continue; // date/time only
+      if (/^\d[\d\s/:.\-,]+$/.test(line)) continue;
 
-      // Find all prices in line
       const priceRegex = /\$?\s*(\d{1,5}[.,]\d{2})\b/g;
       const prices = [];
       let m;
@@ -435,33 +476,21 @@ class SnapFair {
       }
       if (prices.length === 0) continue;
 
-      const price = prices[prices.length - 1]; // rightmost price
+      const price = prices[prices.length - 1];
 
-      // Check for tax
       if (taxRe.test(line)) { detectedTax = price.value; continue; }
       if (tipRe.test(line)) continue;
       if (skipRe.test(line)) continue;
       if (price.value > 500 || price.value <= 0) continue;
 
-      // Extract name: everything before first price
       let name = line.substring(0, prices[0].index).trim();
-
-      // Clean leading qty/numbers/symbols
       name = name
-        .replace(/^[\d]{1,3}\s+/, '')           // "2 Burger" → "Burger"  (but not strip if part of name)
+        .replace(/^[\d]{1,3}\s+/, '')
         .replace(/^[#*\-.\s]+/, '')
         .replace(/[._*\-]+$/, '')
         .replace(/\s{2,}/g, ' ')
         .trim();
 
-      // Detect "2x" or "x2" quantity
-      let qty = 1;
-      const qtyFront = name.match(/^(\d+)\s*[xX×]\s*/);
-      const qtyBack = name.match(/\s*[xX×]\s*(\d+)$/);
-      if (qtyFront) { qty = parseInt(qtyFront[1]); name = name.slice(qtyFront[0].length).trim(); }
-      else if (qtyBack) { qty = parseInt(qtyBack[1]); name = name.slice(0, -qtyBack[0].length).trim(); }
-
-      // If name too short, try text after price
       if (name.length < 2) {
         const afterIdx = prices[prices.length - 1].index + prices[prices.length - 1].len;
         const after = line.substring(afterIdx).trim().replace(/^[-–—:]+/, '').trim();
@@ -481,13 +510,10 @@ class SnapFair {
       if (Math.abs(last.price - sumOthers) < 0.10) items.pop();
     }
 
-    // Remove duplicate prices that look like running totals
+    // Remove running subtotals
     if (items.length > 2) {
-      let runSum = 0;
       const filtered = [];
       for (const item of items) {
-        runSum += item.price;
-        // Skip if this item's price equals running sum of all previous (it's a subtotal line)
         const prevSum = filtered.reduce((s, i) => s + i.price, 0);
         if (filtered.length >= 2 && Math.abs(item.price - prevSum) < 0.10) continue;
         filtered.push(item);
@@ -498,7 +524,9 @@ class SnapFair {
     return { items, tax: detectedTax };
   }
 
-  // ───── Manual Entry ─────
+  // ═══════════════════════════════════════
+  //  MANUAL ENTRY
+  // ═══════════════════════════════════════
 
   startManual() {
     if (!this.items.length) this.items = [];
@@ -508,7 +536,7 @@ class SnapFair {
   }
 
   // ═══════════════════════════════════════
-  //  ITEMS
+  //  ITEMS MANAGEMENT
   // ═══════════════════════════════════════
 
   renderItems() {
@@ -525,15 +553,20 @@ class SnapFair {
       </div>
     `).join('');
 
-    list.querySelectorAll('.item-name').forEach(el => el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'name', e.target.value)));
-    list.querySelectorAll('.item-price').forEach(el => el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'price', parseFloat(e.target.value) || 0)));
-    list.querySelectorAll('.item-delete').forEach(el => el.addEventListener('click', e => this.removeItem(e.currentTarget.dataset.id)));
+    list.querySelectorAll('.item-name').forEach(el => {
+      el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'name', e.target.value));
+    });
+    list.querySelectorAll('.item-price').forEach(el => {
+      el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'price', parseFloat(e.target.value) || 0));
+    });
+    list.querySelectorAll('.item-delete').forEach(el => {
+      el.addEventListener('click', e => this.removeItem(e.currentTarget.dataset.id));
+    });
   }
 
   updateItem(id, field, value) {
     const item = this.items.find(i => i.id === id);
-    if (!item) return;
-    item[field] = value;
+    if (item) item[field] = value;
   }
 
   removeItem(id) {
@@ -551,7 +584,9 @@ class SnapFair {
     setTimeout(() => this.$('#new-item-name').focus(), 100);
   }
 
-  hideAddItemModal() { this.$('#add-item-modal').classList.add('hidden'); }
+  hideAddItemModal() {
+    this.$('#add-item-modal').classList.add('hidden');
+  }
 
   saveNewItem() {
     const name = this.$('#new-item-name').value.trim();
@@ -566,7 +601,7 @@ class SnapFair {
   }
 
   // ═══════════════════════════════════════
-  //  PEOPLE
+  //  PEOPLE MANAGEMENT
   // ═══════════════════════════════════════
 
   renderPeople() {
@@ -590,7 +625,8 @@ class SnapFair {
     const name = input.value.trim();
     if (!name) return;
     if (this.people.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-      this.toast('Already added!', 'warning'); return;
+      this.toast('Already added!', 'warning');
+      return;
     }
     this.people.push({ id: this.uid(), name });
     this.vibrate(10);
@@ -612,7 +648,9 @@ class SnapFair {
   saveGroupToStorage() {
     if (this.people.length < 2) return;
     const saved = JSON.parse(localStorage.getItem('snapfair_names') || '[]');
-    for (const p of this.people) { if (!saved.includes(p.name)) saved.push(p.name); }
+    for (const p of this.people) {
+      if (!saved.includes(p.name)) saved.push(p.name);
+    }
     localStorage.setItem('snapfair_names', JSON.stringify(saved.slice(-20)));
   }
 
@@ -624,7 +662,9 @@ class SnapFair {
     if (!container) return;
     if (!available.length) { this.$('#quick-add')?.classList.add('hidden'); return; }
     this.$('#quick-add')?.classList.remove('hidden');
-    container.innerHTML = available.map(n => `<button class="quick-chip" data-name="${this.escapeHtml(n)}">${this.escapeHtml(n)}</button>`).join('');
+    container.innerHTML = available.map(n =>
+      `<button class="quick-chip" data-name="${this.escapeHtml(n)}">${this.escapeHtml(n)}</button>`
+    ).join('');
     container.querySelectorAll('.quick-chip').forEach(el => {
       el.addEventListener('click', () => {
         this.people.push({ id: this.uid(), name: el.dataset.name });
@@ -658,12 +698,14 @@ class SnapFair {
           </div>
           <div class="assign-people">
             ${this.people.map((p, i) => `
-              <button class="assign-person-btn ${assigned.has(p.id) ? 'assigned' : ''}" data-item-id="${item.id}" data-person-id="${p.id}">
+              <button class="assign-person-btn ${assigned.has(p.id) ? 'assigned' : ''}"
+                      data-item-id="${item.id}" data-person-id="${p.id}">
                 <span class="mini-avatar" style="background:${this.getColor(i)}">${this.getInitials(p.name)}</span>
                 ${this.escapeHtml(p.name)}
               </button>
             `).join('')}
-            <button class="assign-everyone ${allAssigned ? 'all-assigned' : ''}" data-item-id="${item.id}">
+            <button class="assign-everyone ${allAssigned ? 'all-assigned' : ''}"
+                    data-item-id="${item.id}">
               ${allAssigned ? '✓ Everyone' : 'Everyone'}
             </button>
           </div>
@@ -672,10 +714,16 @@ class SnapFair {
     }).join('');
 
     list.querySelectorAll('.assign-person-btn').forEach(el => {
-      el.addEventListener('click', () => { this.vibrate(5); this.toggleAssignment(el.dataset.itemId, el.dataset.personId); });
+      el.addEventListener('click', () => {
+        this.vibrate(5);
+        this.toggleAssignment(el.dataset.itemId, el.dataset.personId);
+      });
     });
     list.querySelectorAll('.assign-everyone').forEach(el => {
-      el.addEventListener('click', () => { this.vibrate(5); this.assignEveryone(el.dataset.itemId); });
+      el.addEventListener('click', () => {
+        this.vibrate(5);
+        this.assignEveryone(el.dataset.itemId);
+      });
     });
   }
 
@@ -694,7 +742,10 @@ class SnapFair {
   }
 
   validateAssignments() {
-    const un = this.items.find(item => { const a = this.assignments[item.id]; return !a || a.size === 0; });
+    const un = this.items.find(item => {
+      const a = this.assignments[item.id];
+      return !a || a.size === 0;
+    });
     if (un) { this.toast(`Assign "${un.name}" to someone`, 'warning'); return false; }
     return true;
   }
@@ -703,8 +754,13 @@ class SnapFair {
   //  CALCULATIONS
   // ═══════════════════════════════════════
 
-  getSubtotal() { return this.items.reduce((s, i) => s + i.price, 0); }
-  getTipAmount() { return this.tipMode === 'custom' ? this.tipCustom : this.getSubtotal() * (this.tipPercent / 100); }
+  getSubtotal() {
+    return this.items.reduce((s, i) => s + i.price, 0);
+  }
+
+  getTipAmount() {
+    return this.tipMode === 'custom' ? this.tipCustom : this.getSubtotal() * (this.tipPercent / 100);
+  }
 
   getPersonBreakdown(personId) {
     const items = [];
@@ -767,16 +823,29 @@ class SnapFair {
     const note = encodeURIComponent(`SnapFair split - ${personName}`);
     let links = '';
     if (h.rv) links += `<a href="https://revolut.me/${h.rv}" target="_blank" rel="noopener" class="pay-link revolut">Revolut ${this.formatMoney(amount)}</a>`;
-    if (h.ws) { const u = h.ws.startsWith('http') ? h.ws : `https://wise.com/pay/${h.ws}`; links += `<a href="${u}" target="_blank" rel="noopener" class="pay-link wise">Wise ${this.formatMoney(amount)}</a>`; }
+    if (h.ws) {
+      const u = h.ws.startsWith('http') ? h.ws : `https://wise.com/pay/${h.ws}`;
+      links += `<a href="${u}" target="_blank" rel="noopener" class="pay-link wise">Wise ${this.formatMoney(amount)}</a>`;
+    }
     if (h.pp) links += `<a href="https://paypal.me/${h.pp}/${amount.toFixed(2)}" target="_blank" rel="noopener" class="pay-link paypal">PayPal ${this.formatMoney(amount)}</a>`;
     if (h.vm) links += `<a href="https://venmo.com/${h.vm}?txn=charge&amount=${amount.toFixed(2)}&note=${note}" target="_blank" rel="noopener" class="pay-link venmo">Venmo ${this.formatMoney(amount)}</a>`;
-    if (h.ca) { const tag = h.ca.replace(/^\$/, ''); links += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}" target="_blank" rel="noopener" class="pay-link cashapp">Cash App ${this.formatMoney(amount)}</a>`; }
-    if (h.bn && h.bi) links += `<div class="bank-details"><div><span class="bank-label">Name: </span><span class="bank-value" onclick="app.copyText(this)">${this.escapeHtml(h.bn)}</span></div><div><span class="bank-label">IBAN: </span><span class="bank-value" onclick="app.copyText(this)">${this.escapeHtml(h.bi)}</span></div></div>`;
+    if (h.ca) {
+      const tag = h.ca.replace(/^\$/, '');
+      links += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}" target="_blank" rel="noopener" class="pay-link cashapp">Cash App ${this.formatMoney(amount)}</a>`;
+    }
+    if (h.bn && h.bi) {
+      links += `<div class="bank-details">
+        <div><span class="bank-label">Name: </span><span class="bank-value" onclick="app.copyText(this)">${this.escapeHtml(h.bn)}</span></div>
+        <div><span class="bank-label">IBAN: </span><span class="bank-value" onclick="app.copyText(this)">${this.escapeHtml(h.bi)}</span></div>
+      </div>`;
+    }
     return links;
   }
 
   copyText(el) {
-    navigator.clipboard.writeText(el.textContent).then(() => this.toast('📋 Copied!', 'success')).catch(() => {});
+    navigator.clipboard.writeText(el.textContent)
+      .then(() => this.toast('📋 Copied!', 'success'))
+      .catch(() => {});
   }
 
   renderSummaryTotals() {
@@ -790,13 +859,11 @@ class SnapFair {
       const token = this.escrowTokens[person.id];
       const isVerified = token?.status === 'verified';
 
-      // Escrow badge
       let badgeHtml = '';
       if (token) {
         badgeHtml = `<span class="escrow-badge ${isVerified ? 'verified' : 'pending'}">${isVerified ? '✅ Paid' : '⏳ Pending'}</span>`;
       }
 
-      // Escrow button
       const escrowBtnClass = isVerified ? 'btn-escrow verified-btn' : 'btn-escrow';
       const escrowBtnText = isVerified ? '✅ Verified' : '🔐 Request Payment';
 
@@ -848,10 +915,84 @@ class SnapFair {
   // ═══════════════════════════════════════
 
   generateEscrowCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
     return code;
+  }
+
+  buildPaymentUrl(person, breakdown, token) {
+    const compact = {
+      n: person.name,
+      a: Math.round(breakdown.total * 100),
+      c: token.code,
+      py: {}
+    };
+
+    const h = this.getPaymentHandles();
+    if (h.pp) compact.py.pp = h.pp;
+    if (h.ws) compact.py.ws = h.ws;
+    if (h.rv) compact.py.rv = h.rv;
+    if (h.vm) compact.py.vm = h.vm;
+    if (h.ca) compact.py.ca = h.ca;
+    if (h.bn) compact.py.bn = h.bn;
+    if (h.bi) compact.py.bi = h.bi;
+
+    compact.it = breakdown.items.map(i => [
+      i.name.substring(0, 20),
+      Math.round(i.share * 100),
+      i.sharedWith
+    ]);
+
+    if (breakdown.taxShare > 0) compact.tx = Math.round(breakdown.taxShare * 100);
+    if (breakdown.tipShare > 0) compact.tp = Math.round(breakdown.tipShare * 100);
+
+    try {
+      const json = JSON.stringify(compact);
+      const encoded = btoa(unescape(encodeURIComponent(json)));
+      return `${window.location.origin}${window.location.pathname}#pay=${encoded}`;
+    } catch {
+      return window.location.href;
+    }
+  }
+
+  generateQR(targetId, data) {
+    try {
+      if (typeof QRious === 'undefined') {
+        console.warn('QRious not loaded');
+        this.showQRFallback(targetId);
+        return;
+      }
+
+      const canvas = document.getElementById(targetId);
+      if (!canvas) return;
+
+      new QRious({
+        element: canvas,
+        value: data,
+        size: 240,
+        level: 'M',
+        background: '#FFFFFF',
+        foreground: '#111827',
+        padding: 12
+      });
+
+      console.log('QR generated, data length:', data.length);
+    } catch (err) {
+      console.error('QR generation failed:', err);
+      this.showQRFallback(targetId);
+    }
+  }
+
+  showQRFallback(targetId) {
+    const canvas = document.getElementById(targetId);
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    canvas.style.display = 'none';
+    const fallback = document.createElement('div');
+    fallback.className = 'qr-fallback';
+    fallback.innerHTML = `<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">📱 QR unavailable<br><small>Use Share/Copy buttons instead</small></p>`;
+    parent.appendChild(fallback);
   }
 
   openEscrowModal(personId) {
@@ -859,32 +1000,12 @@ class SnapFair {
     if (!person) return;
     const bd = this.getPersonBreakdown(personId);
 
-    // Generate or reuse code
     if (!this.escrowTokens[personId]) {
       this.escrowTokens[personId] = { code: this.generateEscrowCode(), status: 'pending' };
     }
     const token = this.escrowTokens[personId];
+    const payUrl = this.buildPaymentUrl(person, bd, token);
 
-    // Build compact payment URL
-    const payData = {
-      n: person.name,
-      a: Math.round(bd.total * 100) / 100,
-      c: btoa(token.code),
-      it: bd.items.map(i => ({ n: i.name, s: Math.round(i.share * 100) / 100, w: i.sharedWith })),
-      tx: Math.round(bd.taxShare * 100) / 100,
-      tp: Math.round(bd.tipShare * 100) / 100,
-      py: this.getPaymentHandles()
-    };
-
-    let payUrl;
-    try {
-      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payData))));
-      payUrl = `${window.location.origin}${window.location.pathname}#pay=${encoded}`;
-    } catch {
-      payUrl = window.location.href;
-    }
-
-    // Build modal
     const modal = this.$('#escrow-modal');
     const body = this.$('#escrow-modal-body');
 
@@ -894,67 +1015,73 @@ class SnapFair {
         <div class="escrow-person">For: <strong>${this.escapeHtml(person.name)}</strong></div>
         <div class="escrow-amount">${this.formatMoney(bd.total)}</div>
       </div>
-      <div class="escrow-qr"><canvas id="escrow-qr-canvas"></canvas></div>
+      <div class="escrow-qr">
+        <canvas id="escrow-qr-canvas" width="240" height="240"></canvas>
+      </div>
       <div class="escrow-code-section">
-        <label>Your confirmation code</label>
+        <label>Confirmation code (keep secret until verified)</label>
         <div class="escrow-code ${token.status === 'verified' ? 'verified' : ''}">${token.code}</div>
-        <p class="text-muted small">Payer receives this code after confirming payment</p>
+        <p class="text-muted small" style="margin-top:6px">Payer sees this code only after clicking "I've Paid"</p>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <button class="btn btn-primary btn-block" id="btn-escrow-share">📤 Share Payment Link</button>
         <button class="btn btn-secondary btn-block" id="btn-escrow-copy">📋 Copy Link</button>
       </div>
       <div class="escrow-verify-section">
-        <label>Verify payment — enter code from payer:</label>
+        <label>Verify — enter the code your friend gives you:</label>
         <div class="escrow-verify-row">
-          <input type="text" id="escrow-verify-input" class="input" placeholder="CODE" maxlength="6">
+          <input type="text" id="escrow-verify-input" class="input" placeholder="XXXXXX" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false">
           <button class="btn btn-primary" id="btn-escrow-verify">Verify</button>
         </div>
+        <div id="escrow-verify-result"></div>
         ${token.status === 'verified' ? '<div class="escrow-verified">✅ Payment Verified!</div>' : ''}
       </div>
-      <button class="btn btn-outline btn-block" id="btn-escrow-close">Close</button>
+      <button class="btn btn-outline btn-block" id="btn-escrow-close" style="margin-top:4px">Close</button>
     `;
 
     modal.classList.remove('hidden');
 
-    // Generate QR code
-    try {
-      if (typeof QRCode !== 'undefined') {
-        QRCode.toCanvas(this.$('#escrow-qr-canvas'), payUrl, {
-          width: 220, margin: 2,
-          color: { dark: '#111827', light: '#FFFFFF' }
-        }, (err) => { if (err) console.warn('QR Error:', err); });
-      }
-    } catch (e) { console.warn('QR generation failed:', e); }
+    // Generate QR after DOM renders
+    requestAnimationFrame(() => {
+      setTimeout(() => this.generateQR('escrow-qr-canvas', payUrl), 50);
+    });
 
     // Events
     this.$('#btn-escrow-share').addEventListener('click', async () => {
       if (navigator.share) {
         try {
-          await navigator.share({ title: `Payment Request — ${person.name}`, text: `${person.name} owes ${this.formatMoney(bd.total)}`, url: payUrl });
+          await navigator.share({
+            title: `Pay ${this.formatMoney(bd.total)} — SnapFair`,
+            text: `${person.name} owes ${this.formatMoney(bd.total)}`,
+            url: payUrl
+          });
           return;
-        } catch {}
+        } catch (e) { if (e.name === 'AbortError') return; }
       }
-      await navigator.clipboard.writeText(payUrl).catch(() => {});
+      try { await navigator.clipboard.writeText(payUrl); } catch {}
       this.toast('📋 Link copied!', 'success');
     });
 
     this.$('#btn-escrow-copy').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(payUrl); } catch {}
-      this.toast('📋 Link copied!', 'success');
+      this.toast('📋 Payment link copied!', 'success');
     });
 
     this.$('#btn-escrow-verify').addEventListener('click', () => {
       const input = this.$('#escrow-verify-input').value.trim().toUpperCase();
+      const resultEl = this.$('#escrow-verify-result');
+      if (!input) { this.toast('Enter the code', 'warning'); return; }
       if (input === token.code) {
         token.status = 'verified';
         this.vibrate(20);
+        resultEl.innerHTML = '<div class="escrow-verified">✅ Payment Verified!</div>';
         this.toast('✅ Payment verified!', 'success');
-        modal.classList.add('hidden');
-        this.renderSummaryTotals();
+        setTimeout(() => { modal.classList.add('hidden'); this.renderSummaryTotals(); }, 1500);
       } else {
-        this.toast('❌ Code doesn\'t match', 'error');
         this.vibrate([50, 30, 50]);
+        resultEl.innerHTML = '<div style="color:var(--danger);font-size:14px;padding:8px 0;font-weight:600">❌ Wrong code — try again</div>';
+        this.$('#escrow-verify-input').value = '';
+        this.$('#escrow-verify-input').focus();
       }
     });
 
@@ -963,14 +1090,19 @@ class SnapFair {
     });
 
     this.$('#btn-escrow-close').addEventListener('click', () => modal.classList.add('hidden'));
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
   }
 
-  // ── Load Payment Request (payer opens QR link) ──
+  // ═══════════════════════════════════════
+  //  PAYMENT REQUEST (payer opens QR link)
+  // ═══════════════════════════════════════
 
   loadPaymentRequest() {
     const hash = window.location.hash;
     if (!hash.startsWith('#pay=')) return false;
-
     try {
       const encoded = hash.slice(5);
       const json = decodeURIComponent(escape(atob(encoded)));
@@ -986,17 +1118,33 @@ class SnapFair {
   renderPaymentRequestScreen(data) {
     this.showScreen('pay-request');
     const container = this.$('#pay-request-content');
-    const code = atob(data.c);
-    const amount = data.a;
+
+    const amount = (data.a || 0) / 100;
+    const code = data.c;
     const handles = data.py || {};
     const note = encodeURIComponent(`SnapFair - ${data.n}`);
 
+    const items = (data.it || []).map(i => ({
+      name: Array.isArray(i) ? i[0] : i.n,
+      share: Array.isArray(i) ? i[1] / 100 : i.s,
+      sharedWith: Array.isArray(i) ? i[2] : (i.w || 1)
+    }));
+
+    const taxShare = (data.tx || 0) / 100;
+    const tipShare = (data.tp || 0) / 100;
+
     let payLinks = '';
     if (handles.rv) payLinks += `<a href="https://revolut.me/${handles.rv}" target="_blank" class="pay-link revolut">Revolut</a>`;
-    if (handles.ws) { const u = handles.ws.startsWith('http') ? handles.ws : `https://wise.com/pay/${handles.ws}`; payLinks += `<a href="${u}" target="_blank" class="pay-link wise">Wise</a>`; }
+    if (handles.ws) {
+      const u = handles.ws.startsWith('http') ? handles.ws : `https://wise.com/pay/${handles.ws}`;
+      payLinks += `<a href="${u}" target="_blank" class="pay-link wise">Wise</a>`;
+    }
     if (handles.pp) payLinks += `<a href="https://paypal.me/${handles.pp}/${amount.toFixed(2)}" target="_blank" class="pay-link paypal">PayPal</a>`;
     if (handles.vm) payLinks += `<a href="https://venmo.com/${handles.vm}?txn=charge&amount=${amount.toFixed(2)}&note=${note}" target="_blank" class="pay-link venmo">Venmo</a>`;
-    if (handles.ca) { const tag = handles.ca.replace(/^\$/, ''); payLinks += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}" target="_blank" class="pay-link cashapp">Cash App</a>`; }
+    if (handles.ca) {
+      const tag = handles.ca.replace(/^\$/, '');
+      payLinks += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}" target="_blank" class="pay-link cashapp">Cash App</a>`;
+    }
 
     container.innerHTML = `
       <div class="pay-request-card">
@@ -1005,14 +1153,14 @@ class SnapFair {
           <div class="pay-request-for">Payment requested from <strong>${this.escapeHtml(data.n)}</strong></div>
         </div>
         <div class="pay-request-items">
-          ${(data.it || []).map(i => `
+          ${items.map(i => `
             <div class="summary-item-row">
-              <span>${this.escapeHtml(i.n)}${i.w > 1 ? ` (÷${i.w})` : ''}</span>
-              <span>${this.formatMoney(i.s)}</span>
+              <span>${this.escapeHtml(i.name)}${i.sharedWith > 1 ? ` (÷${i.sharedWith})` : ''}</span>
+              <span>${this.formatMoney(i.share)}</span>
             </div>
           `).join('')}
-          ${data.tx > 0 ? `<div class="summary-item-row tax-row"><span>Tax</span><span>${this.formatMoney(data.tx)}</span></div>` : ''}
-          ${data.tp > 0 ? `<div class="summary-item-row tip-row"><span>Tip</span><span>${this.formatMoney(data.tp)}</span></div>` : ''}
+          ${taxShare > 0 ? `<div class="summary-item-row tax-row"><span>Tax</span><span>${this.formatMoney(taxShare)}</span></div>` : ''}
+          ${tipShare > 0 ? `<div class="summary-item-row tip-row"><span>Tip</span><span>${this.formatMoney(tipShare)}</span></div>` : ''}
         </div>
         ${payLinks ? `<div class="pay-request-methods"><p class="text-muted small">Pay via:</p><div class="pay-links-row">${payLinks}</div></div>` : ''}
         ${handles.bn && handles.bi ? `
@@ -1024,12 +1172,13 @@ class SnapFair {
           </div>
         ` : ''}
         <div class="pay-request-confirm">
-          <button class="btn btn-primary btn-large btn-block" id="btn-confirm-paid">✅ I've Paid</button>
+          <button class="btn btn-primary btn-large btn-block" id="btn-confirm-paid">✅ I've Paid — Show Confirmation Code</button>
         </div>
         <div class="pay-request-code hidden" id="pay-code-reveal">
           <div class="code-reveal-label">Your confirmation code:</div>
-          <div class="code-reveal-value">${code}</div>
-          <p class="text-muted small" style="margin-top:8px">Share this code with the requester to confirm your payment</p>
+          <div class="code-reveal-value">${this.escapeHtml(code)}</div>
+          <p class="text-muted small" style="margin-top:8px">Send this code to the person who requested payment</p>
+          <button class="btn btn-secondary btn-block" id="btn-copy-paycode" style="margin-top:12px">📋 Copy Code</button>
         </div>
       </div>
     `;
@@ -1043,6 +1192,11 @@ class SnapFair {
       this.vibrate(20);
       this.toast('Code revealed! Share it with the requester', 'success', 4000);
     });
+
+    this.$('#btn-copy-paycode')?.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(code); } catch {}
+      this.toast('📋 Code copied!', 'success');
+    });
   }
 
   // ═══════════════════════════════════════
@@ -1053,15 +1207,25 @@ class SnapFair {
     const text = this.buildSummaryText();
     const shareData = this.buildShareableData();
     if (navigator.share) {
-      try { await navigator.share({ title: 'SnapFair — Bill Split', text, url: shareData.url }); this.toast('📤 Shared!', 'success'); return; } catch (err) { if (err.name === 'AbortError') return; }
+      try {
+        await navigator.share({ title: 'SnapFair — Bill Split', text, url: shareData.url });
+        this.toast('📤 Shared!', 'success');
+        return;
+      } catch (err) { if (err.name === 'AbortError') return; }
     }
-    try { await navigator.clipboard.writeText(shareData.url + '\n\n' + text); this.toast('📋 Link & summary copied!', 'success'); } catch { this.toast('Could not share', 'error'); }
+    try { await navigator.clipboard.writeText(shareData.url + '\n\n' + text); this.toast('📋 Link & summary copied!', 'success'); }
+    catch { this.toast('Could not share', 'error'); }
   }
 
   async copySummary() {
     const text = this.buildSummaryText();
     try { await navigator.clipboard.writeText(text); this.toast('📋 Summary copied!', 'success'); }
-    catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); this.toast('📋 Summary copied!', 'success'); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      this.toast('📋 Summary copied!', 'success');
+    }
   }
 
   buildSummaryText() {
@@ -1082,9 +1246,15 @@ class SnapFair {
 
   buildShareableData() {
     const data = {
-      i: this.items.map(item => ({ n: item.name, p: item.price, a: Array.from(this.assignments[item.id] || []) })),
+      i: this.items.map(item => ({
+        n: item.name,
+        p: item.price,
+        a: Array.from(this.assignments[item.id] || [])
+      })),
       p: this.people.map(p => ({ id: p.id, n: p.name })),
-      t: this.tax, tp: this.tipMode === 'custom' ? this.tipCustom : this.tipPercent, tm: this.tipMode
+      t: this.tax,
+      tp: this.tipMode === 'custom' ? this.tipCustom : this.tipPercent,
+      tm: this.tipMode
     };
     try {
       const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
@@ -1099,12 +1269,13 @@ class SnapFair {
       const encoded = hash.slice(7);
       const data = JSON.parse(decodeURIComponent(escape(atob(encoded))));
       this.people = data.p.map(p => ({ id: p.id, name: p.n }));
-      this.items = data.i.map((item) => { const id = this.uid(); return { id, name: item.n, price: item.p, _a: item.a }; });
+      this.items = data.i.map(item => ({ id: this.uid(), name: item.n, price: item.p, _a: item.a }));
       this.assignments = {};
       this.items.forEach((item, idx) => { this.assignments[item.id] = new Set(data.i[idx].a); });
       this.tax = data.t || 0;
       this.tipMode = data.tm || 'percent';
-      if (this.tipMode === 'custom') this.tipCustom = data.tp || 0; else this.tipPercent = data.tp || 0;
+      if (this.tipMode === 'custom') this.tipCustom = data.tp || 0;
+      else this.tipPercent = data.tp || 0;
       this.renderSharedView();
       this.showScreen('shared');
       return true;
@@ -1127,7 +1298,12 @@ class SnapFair {
             <span class="summary-person-total">${this.formatMoney(bd.total)}</span>
           </div>
           <div class="summary-card-details">
-            ${bd.items.map(i => `<div class="summary-item-row"><span>${this.escapeHtml(i.name)}${i.sharedWith > 1 ? ` (÷${i.sharedWith})` : ''}</span><span>${this.formatMoney(i.share)}</span></div>`).join('')}
+            ${bd.items.map(i => `
+              <div class="summary-item-row">
+                <span>${this.escapeHtml(i.name)}${i.sharedWith > 1 ? ` (÷${i.sharedWith})` : ''}</span>
+                <span>${this.formatMoney(i.share)}</span>
+              </div>
+            `).join('')}
             ${bd.taxShare > 0 ? `<div class="summary-item-row tax-row"><span>Tax</span><span>${this.formatMoney(bd.taxShare)}</span></div>` : ''}
             ${bd.tipShare > 0 ? `<div class="summary-item-row tip-row"><span>Tip</span><span>${this.formatMoney(bd.tipShare)}</span></div>` : ''}
           </div>
@@ -1144,19 +1320,29 @@ class SnapFair {
     `;
   }
 
-  // ───── Reset ─────
+  // ═══════════════════════════════════════
+  //  RESET
+  // ═══════════════════════════════════════
 
   resetApp() {
-    this.items = []; this.people = []; this.assignments = {};
-    this.tax = 0; this.tipPercent = 0; this.tipCustom = 0;
-    this.tipMode = 'percent'; this.currentStep = 0; this.escrowTokens = {};
+    this.items = [];
+    this.people = [];
+    this.assignments = {};
+    this.tax = 0;
+    this.tipPercent = 0;
+    this.tipCustom = 0;
+    this.tipMode = 'percent';
+    this.currentStep = 0;
+    this.escrowTokens = {};
     this.$$('.tip-btn').forEach(b => b.classList.remove('active'));
     this.$('#custom-tip-row')?.classList.add('hidden');
     window.location.hash = '';
     this.showScreen('home');
   }
 
-  // ───── PWA ─────
+  // ═══════════════════════════════════════
+  //  PWA
+  // ═══════════════════════════════════════
 
   async registerSW() {
     if ('serviceWorker' in navigator) {
@@ -1165,5 +1351,9 @@ class SnapFair {
   }
 }
 
-// ───── Launch ─────
-document.addEventListener('DOMContentLoaded', () => { window.app = new SnapFair(); });
+// ═══════════════════════════════════════
+//  LAUNCH
+// ═══════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  window.app = new SnapFair();
+});
