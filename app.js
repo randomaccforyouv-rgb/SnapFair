@@ -967,14 +967,20 @@ class SnapFair {
       const canvas = document.getElementById(targetId);
       if (!canvas) return;
 
+      // Remove any CSS sizing — let QRious control the canvas
+      canvas.removeAttribute('width');
+      canvas.removeAttribute('height');
+      canvas.style.width = '';
+      canvas.style.height = '';
+
       new QRious({
         element: canvas,
         value: data,
-        size: 240,
+        size: 220,
         level: 'M',
         background: '#FFFFFF',
         foreground: '#111827',
-        padding: 12
+        padding: 16
       });
 
       console.log('QR generated, data length:', data.length);
@@ -1016,7 +1022,7 @@ class SnapFair {
         <div class="escrow-amount">${this.formatMoney(bd.total)}</div>
       </div>
       <div class="escrow-qr">
-        <canvas id="escrow-qr-canvas" width="240" height="240"></canvas>
+        <canvas id="escrow-qr-canvas"></canvas>
       </div>
       <div class="escrow-code-section">
         <label>Confirmation code (keep secret until verified)</label>
@@ -1357,3 +1363,4 @@ class SnapFair {
 document.addEventListener('DOMContentLoaded', () => {
   window.app = new SnapFair();
 });
+
