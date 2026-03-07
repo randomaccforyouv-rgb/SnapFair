@@ -233,8 +233,24 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .escrow-amount{font-size:36px;font-weight:800;color:var(--primary-dark)}
 
 /* QR Code */
-.escrow-qr{text-align:center;padding:16px 0}
-.escrow-qr canvas{border-radius:12px;border:2px solid var(--border);background:#fff;display:inline-block;width:240px;height:240px}
+/* QR Code — centered */
+.escrow-qr {
+  text-align: center;
+  padding: 16px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.escrow-qr canvas {
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: #fff;
+  display: block;
+  width: 240px;
+  height: 240px;
+  margin: 0 auto;
+}
 .qr-fallback{border:2px dashed var(--border);border-radius:12px;margin:0 auto;max-width:240px}
 
 .escrow-code-section{text-align:center;padding:12px 0}
@@ -304,3 +320,4 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   .escrow-badge.pending{background:#78350F;color:#FDE68A}
   .escrow-badge.verified{background:#064E3B;color:#6EE7B7}
 }
+
