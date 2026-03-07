@@ -1,5 +1,5 @@
 /* ================================================
-   SnapFair — Full Application Logic
+   SnapFair — Full App with Fixed OCR + QR Escrow
    ================================================ */
 
 class SnapFair {
@@ -16,54 +16,49 @@ class SnapFair {
     this.cameraStream = null;
     this.facingMode = 'environment';
     this.idCounter = 0;
+    this.escrowTokens = {}; // personId -> { code, status }
 
     this.COLORS = [
-      '#059669', '#3B82F6', '#E17055', '#22C55E',
-      '#F59E0B', '#E84393', '#0EA5E9', '#EF4444',
-      '#6AB04C', '#F9CA24', '#30336B', '#22A6B3',
+      '#059669','#3B82F6','#E17055','#22C55E',
+      '#F59E0B','#E84393','#0EA5E9','#EF4444',
+      '#6AB04C','#F9CA24','#30336B','#22A6B3',
     ];
 
     this.init();
   }
 
-  // ----- Utilities -----
+  // ───── Utilities ─────
 
   uid() { return '_' + (++this.idCounter) + '_' + Math.random().toString(36).slice(2, 8); }
-
   $(sel) { return document.querySelector(sel); }
   $$(sel) { return document.querySelectorAll(sel); }
+  formatMoney(n) { return '$' + Math.abs(n).toFixed(2); }
+  getInitials(name) { return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2); }
+  getColor(i) { return this.COLORS[i % this.COLORS.length]; }
+  vibrate(ms = 10) { try { navigator.vibrate?.(ms); } catch {} }
 
-  formatMoney(n) {
-    return '$' + Math.abs(n).toFixed(2);
+  escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
   }
 
-  getInitials(name) {
-    return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  titleCase(str) {
+    return str.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
   }
 
-  getColor(index) {
-    return this.COLORS[index % this.COLORS.length];
-  }
-
-  vibrate(ms = 10) {
-    try { navigator.vibrate?.(ms); } catch {}
-  }
-
-  // ----- Toast -----
+  // ───── Toast ─────
 
   toast(msg, type = 'default', duration = 2500) {
     const el = this.$('#toast');
     el.textContent = msg;
-    el.classList.remove('toast-error', 'toast-success', 'toast-warning');
-    if (type === 'error') el.classList.add('toast-error');
-    if (type === 'success') el.classList.add('toast-success');
-    if (type === 'warning') el.classList.add('toast-warning');
+    el.className = 'toast' + (type !== 'default' ? ' toast-' + type : '');
     el.classList.add('show');
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => el.classList.remove('show'), duration);
   }
 
-  // ----- Screen Navigation -----
+  // ───── Screens ─────
 
   showScreen(name, step = null) {
     this.$$('.screen').forEach(s => s.classList.remove('active'));
@@ -80,7 +75,6 @@ class SnapFair {
       this.currentStep = 0;
       progress.classList.add('hidden');
     }
-
     window.scrollTo(0, 0);
   }
 
@@ -88,168 +82,94 @@ class SnapFair {
     this.$$('.dot').forEach(d => {
       const s = parseInt(d.dataset.step);
       d.classList.remove('active', 'done');
-      if (s === step) {
-        d.classList.add('active');
-      } else if (s < step) {
-        d.classList.add('done');
-      }
+      if (s === step) d.classList.add('active');
+      else if (s < step) d.classList.add('done');
     });
-
-    // Update connector lines
     this.$$('.dot-connector').forEach(c => {
-      const afterStep = parseInt(c.dataset.after);
-      c.classList.toggle('done', afterStep < step);
+      c.classList.toggle('done', parseInt(c.dataset.after) < step);
     });
   }
 
-  // ----- Step Dot Click Navigation -----
-
   handleDotClick(targetStep) {
-    // Only allow going BACK to completed steps
-    if (targetStep >= this.currentStep) return;
-    if (targetStep < 1 || targetStep > 4) return;
-
+    if (targetStep >= this.currentStep || targetStep < 1 || targetStep > 4) return;
     this.vibrate(5);
-
     switch (targetStep) {
-      case 1:
-        this.renderItems();
-        this.showScreen('items', 1);
-        break;
+      case 1: this.renderItems(); this.showScreen('items', 1); break;
       case 2:
-        if (this.items.length === 0) {
-          this.toast('⚠️ Add items first', 'warning');
-          return;
-        }
-        this.renderPeople();
-        this.showScreen('people', 2);
-        break;
+        if (!this.items.length) { this.toast('Add items first', 'warning'); return; }
+        this.renderPeople(); this.showScreen('people', 2); break;
       case 3:
-        if (this.people.length < 2) {
-          this.toast('⚠️ Add people first', 'warning');
-          return;
-        }
-        this.initAssignments();
-        this.renderAssignments();
-        this.showScreen('assign', 3);
-        break;
+        if (this.people.length < 2) { this.toast('Add people first', 'warning'); return; }
+        this.initAssignments(); this.renderAssignments(); this.showScreen('assign', 3); break;
       case 4:
         if (!this.validateAssignments()) return;
-        this.renderSummary();
-        this.showScreen('summary', 4);
-        break;
+        this.renderSummary(); this.showScreen('summary', 4); break;
     }
   }
 
-  // ----- Initialization -----
+  // ───── Init ─────
 
   init() {
-    // Check for shared split in URL
+    // Check for shared split or payment request in URL
+    if (this.loadPaymentRequest()) return;
     if (this.loadSharedSplit()) return;
 
-    // Step dot click navigation
+    // Step dots
     this.$$('.dot').forEach(dot => {
-      dot.addEventListener('click', () => {
-        this.handleDotClick(parseInt(dot.dataset.step));
-      });
+      dot.addEventListener('click', () => this.handleDotClick(parseInt(dot.dataset.step)));
     });
 
-    // Screen: Home
+    // Home
     this.$('#btn-scan').addEventListener('click', () => this.openCamera());
     this.$('#btn-upload').addEventListener('click', () => this.$('#file-input').click());
     this.$('#btn-manual').addEventListener('click', () => this.startManual());
     this.$('#file-input').addEventListener('change', e => this.handleFileUpload(e));
 
-    // Screen: Camera
+    // Camera
     this.$('#btn-camera-back').addEventListener('click', () => this.closeCamera());
     this.$('#btn-capture').addEventListener('click', () => this.capturePhoto());
     this.$('#btn-flip-camera').addEventListener('click', () => this.flipCamera());
 
-    // Screen: Items
+    // Items
     this.$('#btn-add-item').addEventListener('click', () => this.showAddItemModal());
     this.$('#btn-save-item').addEventListener('click', () => this.saveNewItem());
     this.$('#btn-cancel-item').addEventListener('click', () => this.hideAddItemModal());
     this.$('#btn-items-back').addEventListener('click', () => this.showScreen('home'));
     this.$('#btn-items-next').addEventListener('click', () => {
-      if (this.items.length === 0) { this.toast('Add at least one item', 'warning'); return; }
-      this.renderPeople();
-      this.showScreen('people', 2);
+      if (!this.items.length) { this.toast('Add at least one item', 'warning'); return; }
+      this.renderPeople(); this.showScreen('people', 2);
     });
+    this.$('#new-item-price').addEventListener('keydown', e => { if (e.key === 'Enter') this.saveNewItem(); });
+    this.$('#new-item-name').addEventListener('keydown', e => { if (e.key === 'Enter') this.$('#new-item-price').focus(); });
 
-    // Enter key in new item modal
-    this.$('#new-item-price').addEventListener('keydown', e => {
-      if (e.key === 'Enter') this.saveNewItem();
-    });
-    this.$('#new-item-name').addEventListener('keydown', e => {
-      if (e.key === 'Enter') this.$('#new-item-price').focus();
-    });
-
-    // Screen: People
+    // People
     this.$('#btn-add-person').addEventListener('click', () => this.addPersonFromInput());
-    this.$('#person-name-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter') this.addPersonFromInput();
-    });
-    this.$('#btn-people-back').addEventListener('click', () => {
-      this.renderItems();
-      this.showScreen('items', 1);
-    });
+    this.$('#person-name-input').addEventListener('keydown', e => { if (e.key === 'Enter') this.addPersonFromInput(); });
+    this.$('#btn-people-back').addEventListener('click', () => { this.renderItems(); this.showScreen('items', 1); });
     this.$('#btn-people-next').addEventListener('click', () => {
       if (this.people.length < 2) { this.toast('Add at least 2 people', 'warning'); return; }
-      this.saveGroupToStorage();
-      this.initAssignments();
-      this.renderAssignments();
-      this.showScreen('assign', 3);
+      this.saveGroupToStorage(); this.initAssignments(); this.renderAssignments(); this.showScreen('assign', 3);
     });
 
-    // Screen: Assign
-    this.$('#btn-assign-back').addEventListener('click', () => {
-      this.renderPeople();
-      this.showScreen('people', 2);
-    });
+    // Assign
+    this.$('#btn-assign-back').addEventListener('click', () => { this.renderPeople(); this.showScreen('people', 2); });
     this.$('#btn-assign-next').addEventListener('click', () => {
       if (!this.validateAssignments()) return;
-      this.renderSummary();
-      this.showScreen('summary', 4);
+      this.renderSummary(); this.showScreen('summary', 4);
     });
 
-    // Screen: Summary — Back button
-    this.$('#btn-summary-back').addEventListener('click', () => {
-      this.renderAssignments();
-      this.showScreen('assign', 3);
-    });
+    // Summary
+    this.$('#btn-summary-back').addEventListener('click', () => { this.renderAssignments(); this.showScreen('assign', 3); });
+    this.$('#tax-input').addEventListener('input', () => { this.tax = parseFloat(this.$('#tax-input').value) || 0; this.renderSummaryTotals(); });
+    this.$$('.tip-btn').forEach(btn => btn.addEventListener('click', () => this.handleTipBtn(btn)));
+    this.$('#custom-tip-input').addEventListener('input', () => { this.tipCustom = parseFloat(this.$('#custom-tip-input').value) || 0; this.renderSummaryTotals(); });
 
-    // Screen: Summary — Tax
-    this.$('#tax-input').addEventListener('input', () => {
-      this.tax = parseFloat(this.$('#tax-input').value) || 0;
-      this.renderSummaryTotals();
-    });
-
-    // Screen: Summary — Tip buttons
-    this.$$('.tip-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.handleTipBtn(btn));
-    });
-
-    this.$('#custom-tip-input').addEventListener('input', () => {
-      this.tipCustom = parseFloat(this.$('#custom-tip-input').value) || 0;
-      this.renderSummaryTotals();
-    });
-
-    // Payment handles — save to localStorage
-    const paymentHandles = [
-      'paypal-handle', 'wise-handle', 'revolut-handle',
-      'venmo-handle', 'cashapp-handle',
-      'bank-name-handle', 'bank-iban-handle'
-    ];
-
-    paymentHandles.forEach(id => {
+    // Payment handles — persist
+    ['paypal-handle','wise-handle','revolut-handle','venmo-handle','cashapp-handle','bank-name-handle','bank-iban-handle'].forEach(id => {
       const el = this.$(`#${id}`);
-      if (el) {
-        el.value = localStorage.getItem(`snapfair_${id}`) || '';
-        el.addEventListener('input', () => {
-          localStorage.setItem(`snapfair_${id}`, el.value.trim());
-          this.renderSummaryTotals();
-        });
-      }
+      if (!el) return;
+      el.value = localStorage.getItem(`snapfair_${id}`) || '';
+      el.addEventListener('input', () => { localStorage.setItem(`snapfair_${id}`, el.value.trim()); this.renderSummaryTotals(); });
     });
 
     this.$('#btn-share').addEventListener('click', () => this.shareSplit());
@@ -257,58 +177,57 @@ class SnapFair {
     this.$('#btn-new-split').addEventListener('click', () => this.resetApp());
 
     // Shared screen
-    this.$('#btn-shared-new')?.addEventListener('click', () => {
-      window.location.hash = '';
-      this.resetApp();
-    });
+    this.$('#btn-shared-new')?.addEventListener('click', () => { window.location.hash = ''; this.resetApp(); });
 
-    // Quick add names from saved groups
+    // Payment request screen
+    this.$('#btn-payreq-new')?.addEventListener('click', () => { window.location.hash = ''; this.resetApp(); });
+
     this.renderQuickAdd();
-
-    // Register service worker
     this.registerSW();
   }
 
-  // ----- Camera -----
+  // ═══════════════════════════════════════
+  //  CAMERA  (4K + autofocus)
+  // ═══════════════════════════════════════
 
   async openCamera() {
     try {
       this.cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: this.facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: {
+          facingMode: this.facingMode,
+          width: { ideal: 3840 },
+          height: { ideal: 2160 },
+          focusMode: { ideal: 'continuous' },
+          whiteBalanceMode: { ideal: 'continuous' },
+          exposureMode: { ideal: 'continuous' },
+        },
         audio: false
       });
       this.$('#camera-feed').srcObject = this.cameraStream;
       this.showScreen('camera');
+      console.log(`Camera: ${this.$('#camera-feed').videoWidth}x${this.$('#camera-feed').videoHeight}`);
     } catch (err) {
       console.warn('Camera error:', err);
-      this.toast('📷 Camera not available — try uploading a photo instead', 'error');
+      this.toast('📷 Camera not available — try uploading a photo', 'error');
       this.$('#file-input').click();
     }
   }
 
   closeCamera() {
-    if (this.cameraStream) {
-      this.cameraStream.getTracks().forEach(t => t.stop());
-      this.cameraStream = null;
-    }
+    if (this.cameraStream) { this.cameraStream.getTracks().forEach(t => t.stop()); this.cameraStream = null; }
     this.$('#camera-feed').srcObject = null;
     this.showScreen('home');
   }
 
   async flipCamera() {
     this.facingMode = this.facingMode === 'environment' ? 'user' : 'environment';
-    if (this.cameraStream) {
-      this.cameraStream.getTracks().forEach(t => t.stop());
-    }
+    if (this.cameraStream) this.cameraStream.getTracks().forEach(t => t.stop());
     try {
       this.cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: this.facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false
+        video: { facingMode: this.facingMode, width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false
       });
       this.$('#camera-feed').srcObject = this.cameraStream;
-    } catch {
-      this.toast('📷 Could not switch camera', 'error');
-    }
+    } catch { this.toast('Could not switch camera', 'error'); }
   }
 
   capturePhoto() {
@@ -317,64 +236,118 @@ class SnapFair {
     const canvas = this.$('#capture-canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-
+    canvas.getContext('2d').drawImage(video, 0, 0);
     this.closeCamera();
-    const preprocessed = this.preprocessImage(canvas);
-    this.processImage(preprocessed);
+    const processed = this.preprocessImage(canvas);
+    this.processImage(processed);
   }
 
-  // ----- File Upload -----
+  // ═══════════════════════════════════════
+  //  FILE UPLOAD
+  // ═══════════════════════════════════════
 
   handleFileUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const preprocessed = this.preprocessImage(canvas);
-        this.processImage(preprocessed);
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext('2d').drawImage(img, 0, 0);
+        const processed = this.preprocessImage(c);
+        this.processImage(processed);
       };
-      img.onerror = () => {
-        this.toast('🖼️ Could not read that image — try another photo', 'error');
-      };
+      img.onerror = () => this.toast('Could not read image', 'error');
       img.src = ev.target.result;
     };
-    reader.onerror = () => {
-      this.toast('🖼️ Upload failed — try again', 'error');
-    };
+    reader.onerror = () => this.toast('Upload failed', 'error');
     reader.readAsDataURL(file);
   }
 
-  // ----- Image Preprocessing -----
+  // ═══════════════════════════════════════
+  //  IMAGE PREPROCESSING  (THE KEY FIX)
+  // ═══════════════════════════════════════
 
-  preprocessImage(canvas) {
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imageData.data;
+  preprocessImage(sourceCanvas) {
+    let w = sourceCanvas.width;
+    let h = sourceCanvas.height;
+    const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+    let imgData = ctx.getImageData(0, 0, w, h);
+    let d = imgData.data;
 
+    // ── 1. Grayscale ──
     for (let i = 0; i < d.length; i += 4) {
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      const contrast = 1.6;
-      const mid = 128;
-      const val = Math.min(255, Math.max(0, (gray - mid) * contrast + mid));
+      d[i] = d[i + 1] = d[i + 2] = gray;
+    }
+
+    // ── 2. Contrast boost ──
+    const factor = 1.8;
+    for (let i = 0; i < d.length; i += 4) {
+      let v = factor * (d[i] - 128) + 128;
+      d[i] = d[i + 1] = d[i + 2] = Math.max(0, Math.min(255, v));
+    }
+
+    // ── 3. Otsu's binarization ──
+    const histogram = new Array(256).fill(0);
+    for (let i = 0; i < d.length; i += 4) histogram[d[i]]++;
+
+    const totalPixels = w * h;
+    let sum = 0;
+    for (let t = 0; t < 256; t++) sum += t * histogram[t];
+
+    let sumB = 0, wB = 0, maxVar = 0, threshold = 128;
+    for (let t = 0; t < 256; t++) {
+      wB += histogram[t];
+      if (wB === 0) continue;
+      const wF = totalPixels - wB;
+      if (wF === 0) break;
+      sumB += t * histogram[t];
+      const mB = sumB / wB;
+      const mF = (sum - sumB) / wF;
+      const variance = wB * wF * (mB - mF) * (mB - mF);
+      if (variance > maxVar) { maxVar = variance; threshold = t; }
+    }
+
+    for (let i = 0; i < d.length; i += 4) {
+      const val = d[i] > threshold ? 255 : 0;
       d[i] = d[i + 1] = d[i + 2] = val;
     }
 
-    ctx.putImageData(imageData, 0, 0);
-    return canvas;
+    ctx.putImageData(imgData, 0, 0);
+
+    // ── 4. Upscale if too small (OCR needs ~300 DPI) ──
+    let outCanvas = sourceCanvas;
+    if (w < 1500) {
+      const scale = Math.ceil(1500 / w);
+      const up = document.createElement('canvas');
+      up.width = w * scale; up.height = h * scale;
+      const uctx = up.getContext('2d');
+      uctx.imageSmoothingEnabled = false;
+      uctx.drawImage(sourceCanvas, 0, 0, up.width, up.height);
+      outCanvas = up;
+      w = up.width; h = up.height;
+    }
+
+    // ── 5. White border padding (helps Tesseract) ──
+    const pad = 30;
+    const bordered = document.createElement('canvas');
+    bordered.width = w + pad * 2;
+    bordered.height = h + pad * 2;
+    const bctx = bordered.getContext('2d');
+    bctx.fillStyle = '#ffffff';
+    bctx.fillRect(0, 0, bordered.width, bordered.height);
+    bctx.drawImage(outCanvas, pad, pad);
+
+    return bordered;
   }
 
-  // ----- OCR Processing -----
+  // ═══════════════════════════════════════
+  //  OCR (Tesseract)
+  // ═══════════════════════════════════════
 
   async processImage(canvas) {
     this.showScreen('processing');
@@ -388,38 +361,31 @@ class SnapFair {
     try {
       const worker = await Tesseract.createWorker('eng', 1, {
         logger: m => {
-          if (m.status === 'loading tesseract core') {
-            statusEl.textContent = 'Loading OCR engine…';
-            progressEl.style.width = '10%';
-          } else if (m.status === 'initializing tesseract') {
-            statusEl.textContent = 'Initializing…';
-            progressEl.style.width = '20%';
-          } else if (m.status === 'loading language traineddata') {
-            statusEl.textContent = 'Loading language data…';
-            detailEl.textContent = 'First time may take a moment';
-            progressEl.style.width = '30%';
-          } else if (m.status === 'initializing api') {
-            statusEl.textContent = 'Almost ready…';
-            progressEl.style.width = '50%';
-          } else if (m.status === 'recognizing text') {
-            statusEl.textContent = 'Reading your receipt…';
-            detailEl.textContent = `${Math.round(m.progress * 100)}% complete`;
-            progressEl.style.width = `${50 + m.progress * 50}%`;
-          }
+          if (m.status === 'loading tesseract core') { statusEl.textContent = 'Loading OCR engine…'; progressEl.style.width = '10%'; }
+          else if (m.status === 'initializing tesseract') { statusEl.textContent = 'Initializing…'; progressEl.style.width = '20%'; }
+          else if (m.status === 'loading language traineddata') { statusEl.textContent = 'Loading language data…'; detailEl.textContent = 'First time may take a moment'; progressEl.style.width = '30%'; }
+          else if (m.status === 'initializing api') { statusEl.textContent = 'Almost ready…'; progressEl.style.width = '50%'; }
+          else if (m.status === 'recognizing text') { statusEl.textContent = 'Reading your receipt…'; detailEl.textContent = `${Math.round(m.progress * 100)}% complete`; progressEl.style.width = `${50 + m.progress * 50}%`; }
         }
+      });
+
+      // Set optimized parameters for receipts
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',         // Uniform text block
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789$.,/()-+#@&\' ',
       });
 
       const { data: { text } } = await worker.recognize(canvas);
       await worker.terminate();
 
-      console.log('OCR Raw Text:\n', text);
+      console.log('── RAW OCR TEXT ──\n', text);
 
       const parsed = this.parseReceipt(text);
       this.items = parsed.items;
       this.tax = parsed.tax;
 
       if (this.items.length === 0) {
-        this.toast('⚠️ No items found — try manual entry', 'warning');
+        this.toast('No items found — try manual entry or better lighting', 'warning', 4000);
         this.startManual();
         return;
       }
@@ -428,145 +394,146 @@ class SnapFair {
       this.renderItems();
       this.showScreen('items', 1);
       this.toast(`✅ Found ${this.items.length} items!`, 'success');
-
     } catch (err) {
       console.error('OCR Error:', err);
-      this.toast('⚠️ OCR failed — entering manual mode', 'error');
+      this.toast('OCR failed — entering manual mode', 'error');
       this.startManual();
     }
   }
 
-  // ----- Receipt Parser -----
+  // ═══════════════════════════════════════
+  //  RECEIPT PARSER  (IMPROVED)
+  // ═══════════════════════════════════════
 
   parseReceipt(text) {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    // Clean up common OCR mistakes
+    const cleaned = text
+      .replace(/[|]/g, 'I')
+      .replace(/[{}[\]]/g, '')
+      .replace(/\r\n/g, '\n');
+
+    const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
     const items = [];
     let detectedTax = 0;
 
-    const skipWords = [
-      'subtotal', 'sub total', 'total', 'balance', 'amount due',
-      'cash', 'credit', 'debit', 'visa', 'mastercard', 'amex',
-      'change', 'payment', 'tender', 'thank', 'welcome', 'guest',
-      'server', 'table', 'check', 'order', 'date', 'time',
-      'receipt', 'tel', 'phone', 'fax', 'www', 'http',
-      'discount', 'promo', 'coupon', 'reward'
-    ];
-
-    const taxWords = ['tax', 'hst', 'gst', 'pst', 'vat', 'sales tax'];
-    const tipWords = ['tip', 'gratuity', 'service charge'];
+    const skipRe = /\b(subtotal|sub\s*total|total|balance|amount\s*due|cash|credit|debit|visa|master\s*card|amex|change|payment|tender|thank|welcome|guest|server|table|check\s*#|order\s*#|date|time|receipt|tel|phone|fax|www\.|http|discount|promo|coupon|reward|store|address|register|cashier|transaction|ref\b|auth\b|card\s*#|member|loyalty|points|earned)\b/i;
+    const taxRe = /\b(tax|hst|gst|pst|vat|sales\s*tax|state\s*tax|local\s*tax|mwst|ust|afa)\b/i;
+    const tipRe = /\b(tip|gratuity|service\s*charge|service\s*fee)\b/i;
 
     for (const line of lines) {
-      const lower = line.toLowerCase();
-
       if (line.length < 3) continue;
       if (!/[a-zA-Z]/.test(line)) continue;
+      if (/^[-=*_#.~]{3,}$/.test(line.replace(/\s/g, ''))) continue;
+      if (/^\d[\d\s/:.\-,]+$/.test(line)) continue; // date/time only
 
+      // Find all prices in line
+      const priceRegex = /\$?\s*(\d{1,5}[.,]\d{2})\b/g;
       const prices = [];
-      let match;
-      const regex = /\$?\s*(\d{1,4}\.\d{2})\b/g;
-      while ((match = regex.exec(line)) !== null) {
-        prices.push({ value: parseFloat(match[1]), index: match.index });
+      let m;
+      while ((m = priceRegex.exec(line)) !== null) {
+        prices.push({ value: parseFloat(m[1].replace(',', '.')), index: m.index, len: m[0].length });
       }
-
       if (prices.length === 0) continue;
 
-      const price = prices[prices.length - 1];
+      const price = prices[prices.length - 1]; // rightmost price
 
+      // Check for tax
+      if (taxRe.test(line)) { detectedTax = price.value; continue; }
+      if (tipRe.test(line)) continue;
+      if (skipRe.test(line)) continue;
+      if (price.value > 500 || price.value <= 0) continue;
+
+      // Extract name: everything before first price
       let name = line.substring(0, prices[0].index).trim();
-      name = name.replace(/^[\d\s.#*\-]+/, '').replace(/[._*]+$/, '').trim();
 
-      if (taxWords.some(tw => lower.includes(tw))) {
-        detectedTax = price.value;
-        continue;
-      }
+      // Clean leading qty/numbers/symbols
+      name = name
+        .replace(/^[\d]{1,3}\s+/, '')           // "2 Burger" → "Burger"  (but not strip if part of name)
+        .replace(/^[#*\-.\s]+/, '')
+        .replace(/[._*\-]+$/, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
 
-      if (tipWords.some(tw => lower.includes(tw))) continue;
-      if (skipWords.some(sw => lower.includes(sw))) continue;
-      if (price.value > 200) continue;
+      // Detect "2x" or "x2" quantity
+      let qty = 1;
+      const qtyFront = name.match(/^(\d+)\s*[xX×]\s*/);
+      const qtyBack = name.match(/\s*[xX×]\s*(\d+)$/);
+      if (qtyFront) { qty = parseInt(qtyFront[1]); name = name.slice(qtyFront[0].length).trim(); }
+      else if (qtyBack) { qty = parseInt(qtyBack[1]); name = name.slice(0, -qtyBack[0].length).trim(); }
 
+      // If name too short, try text after price
       if (name.length < 2) {
-        const afterPrice = line.substring(prices[prices.length - 1].index + prices[prices.length - 1].value.toString().length + 1).trim();
-        if (afterPrice.length >= 2) {
-          name = afterPrice;
-        } else {
-          continue;
-        }
+        const afterIdx = prices[prices.length - 1].index + prices[prices.length - 1].len;
+        const after = line.substring(afterIdx).trim().replace(/^[-–—:]+/, '').trim();
+        if (after.length >= 2 && /[a-zA-Z]/.test(after)) name = after;
+        else continue;
       }
 
-      if (price.value > 0 && price.value < 200) {
-        items.push({
-          id: this.uid(),
-          name: this.titleCase(name),
-          price: price.value
-        });
-      }
+      if (name.length < 2) continue;
+
+      items.push({ id: this.uid(), name: this.titleCase(name), price: price.value });
     }
 
-    if (items.length > 1) {
+    // Remove accidental total line
+    if (items.length > 2) {
       const last = items[items.length - 1];
       const sumOthers = items.slice(0, -1).reduce((s, i) => s + i.price, 0);
-      if (Math.abs(last.price - sumOthers) < 0.02) {
-        items.pop();
+      if (Math.abs(last.price - sumOthers) < 0.10) items.pop();
+    }
+
+    // Remove duplicate prices that look like running totals
+    if (items.length > 2) {
+      let runSum = 0;
+      const filtered = [];
+      for (const item of items) {
+        runSum += item.price;
+        // Skip if this item's price equals running sum of all previous (it's a subtotal line)
+        const prevSum = filtered.reduce((s, i) => s + i.price, 0);
+        if (filtered.length >= 2 && Math.abs(item.price - prevSum) < 0.10) continue;
+        filtered.push(item);
       }
+      if (filtered.length >= items.length - 1) return { items: filtered, tax: detectedTax };
     }
 
     return { items, tax: detectedTax };
   }
 
-  titleCase(str) {
-    return str.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
-  }
-
-  // ----- Manual Entry -----
+  // ───── Manual Entry ─────
 
   startManual() {
-    this.items = [];
+    if (!this.items.length) this.items = [];
     this.renderItems();
     this.showScreen('items', 1);
     this.showAddItemModal();
   }
 
-  // ----- Items Management -----
+  // ═══════════════════════════════════════
+  //  ITEMS
+  // ═══════════════════════════════════════
 
   renderItems() {
     const list = this.$('#items-list');
-
-    if (this.items.length === 0) {
-      list.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">📝</div>
-          <p>No items yet. Add your first item!</p>
-        </div>`;
+    if (!this.items.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><p>No items yet. Add your first item!</p></div>';
       return;
     }
-
     list.innerHTML = this.items.map(item => `
       <div class="item-card" data-id="${item.id}">
-        <input class="item-name" value="${this.escapeHtml(item.name)}" 
-               data-id="${item.id}" data-field="name" aria-label="Item name">
-        <input class="item-price" type="number" step="0.01" min="0" 
-               value="${item.price.toFixed(2)}" 
-               data-id="${item.id}" data-field="price" aria-label="Price">
+        <input class="item-name" value="${this.escapeHtml(item.name)}" data-id="${item.id}" data-field="name" aria-label="Item name">
+        <input class="item-price" type="number" step="0.01" min="0" value="${item.price.toFixed(2)}" data-id="${item.id}" data-field="price" aria-label="Price">
         <button class="item-delete" data-id="${item.id}" aria-label="Remove">✕</button>
       </div>
     `).join('');
 
-    list.querySelectorAll('.item-name').forEach(el => {
-      el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'name', e.target.value));
-    });
-    list.querySelectorAll('.item-price').forEach(el => {
-      el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'price', parseFloat(e.target.value) || 0));
-    });
-    list.querySelectorAll('.item-delete').forEach(el => {
-      el.addEventListener('click', e => this.removeItem(e.currentTarget.dataset.id));
-    });
+    list.querySelectorAll('.item-name').forEach(el => el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'name', e.target.value)));
+    list.querySelectorAll('.item-price').forEach(el => el.addEventListener('change', e => this.updateItem(e.target.dataset.id, 'price', parseFloat(e.target.value) || 0)));
+    list.querySelectorAll('.item-delete').forEach(el => el.addEventListener('click', e => this.removeItem(e.currentTarget.dataset.id)));
   }
 
   updateItem(id, field, value) {
     const item = this.items.find(i => i.id === id);
     if (!item) return;
-    if (field === 'name') item.name = value;
-    if (field === 'price') item.price = value;
+    item[field] = value;
   }
 
   removeItem(id) {
@@ -584,17 +551,13 @@ class SnapFair {
     setTimeout(() => this.$('#new-item-name').focus(), 100);
   }
 
-  hideAddItemModal() {
-    this.$('#add-item-modal').classList.add('hidden');
-  }
+  hideAddItemModal() { this.$('#add-item-modal').classList.add('hidden'); }
 
   saveNewItem() {
     const name = this.$('#new-item-name').value.trim();
     const price = parseFloat(this.$('#new-item-price').value);
-
     if (!name) { this.toast('Enter item name', 'warning'); return; }
     if (isNaN(price) || price <= 0) { this.toast('Enter a valid price', 'warning'); return; }
-
     this.items.push({ id: this.uid(), name, price });
     this.vibrate(10);
     this.hideAddItemModal();
@@ -602,29 +565,23 @@ class SnapFair {
     this.toast('✅ Item added', 'success');
   }
 
-  // ----- People Management -----
+  // ═══════════════════════════════════════
+  //  PEOPLE
+  // ═══════════════════════════════════════
 
   renderPeople() {
     const list = this.$('#people-list');
+    list.innerHTML = this.people.map((p, i) => `
+      <div class="person-chip" data-id="${p.id}">
+        <div class="person-avatar" style="background:${this.getColor(i)}">${this.getInitials(p.name)}</div>
+        <span>${this.escapeHtml(p.name)}</span>
+        <button class="person-remove" data-id="${p.id}" aria-label="Remove">✕</button>
+      </div>
+    `).join('');
 
-    if (this.people.length === 0) {
-      list.innerHTML = '';
-    } else {
-      list.innerHTML = this.people.map((p, i) => `
-        <div class="person-chip" data-id="${p.id}">
-          <div class="person-avatar" style="background:${this.getColor(i)}">
-            ${this.getInitials(p.name)}
-          </div>
-          <span>${this.escapeHtml(p.name)}</span>
-          <button class="person-remove" data-id="${p.id}" aria-label="Remove">✕</button>
-        </div>
-      `).join('');
-
-      list.querySelectorAll('.person-remove').forEach(el => {
-        el.addEventListener('click', e => this.removePerson(e.currentTarget.dataset.id));
-      });
-    }
-
+    list.querySelectorAll('.person-remove').forEach(el => {
+      el.addEventListener('click', e => this.removePerson(e.currentTarget.dataset.id));
+    });
     this.$('#btn-people-next').disabled = this.people.length < 2;
   }
 
@@ -632,12 +589,9 @@ class SnapFair {
     const input = this.$('#person-name-input');
     const name = input.value.trim();
     if (!name) return;
-
     if (this.people.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-      this.toast('Already added!', 'warning');
-      return;
+      this.toast('Already added!', 'warning'); return;
     }
-
     this.people.push({ id: this.uid(), name });
     this.vibrate(10);
     input.value = '';
@@ -649,47 +603,31 @@ class SnapFair {
   removePerson(id) {
     this.vibrate(10);
     this.people = this.people.filter(p => p.id !== id);
-    for (const itemId in this.assignments) {
-      this.assignments[itemId].delete(id);
-    }
+    for (const itemId in this.assignments) this.assignments[itemId].delete(id);
+    delete this.escrowTokens[id];
     this.renderPeople();
     this.renderQuickAdd();
   }
 
-  // ----- Quick Add / Saved Groups -----
-
   saveGroupToStorage() {
     if (this.people.length < 2) return;
-    const names = this.people.map(p => p.name);
     const saved = JSON.parse(localStorage.getItem('snapfair_names') || '[]');
-    for (const n of names) {
-      if (!saved.includes(n)) saved.push(n);
-    }
+    for (const p of this.people) { if (!saved.includes(p.name)) saved.push(p.name); }
     localStorage.setItem('snapfair_names', JSON.stringify(saved.slice(-20)));
   }
 
   renderQuickAdd() {
     const saved = JSON.parse(localStorage.getItem('snapfair_names') || '[]');
-    const currentNames = new Set(this.people.map(p => p.name.toLowerCase()));
-    const available = saved.filter(n => !currentNames.has(n.toLowerCase()));
-
+    const current = new Set(this.people.map(p => p.name.toLowerCase()));
+    const available = saved.filter(n => !current.has(n.toLowerCase()));
     const container = this.$('#quick-chips');
     if (!container) return;
-
-    if (available.length === 0) {
-      this.$('#quick-add').classList.add('hidden');
-      return;
-    }
-
-    this.$('#quick-add').classList.remove('hidden');
-    container.innerHTML = available.map(n => `
-      <button class="quick-chip" data-name="${this.escapeHtml(n)}">${this.escapeHtml(n)}</button>
-    `).join('');
-
+    if (!available.length) { this.$('#quick-add')?.classList.add('hidden'); return; }
+    this.$('#quick-add')?.classList.remove('hidden');
+    container.innerHTML = available.map(n => `<button class="quick-chip" data-name="${this.escapeHtml(n)}">${this.escapeHtml(n)}</button>`).join('');
     container.querySelectorAll('.quick-chip').forEach(el => {
       el.addEventListener('click', () => {
-        const name = el.dataset.name;
-        this.people.push({ id: this.uid(), name });
+        this.people.push({ id: this.uid(), name: el.dataset.name });
         this.vibrate(10);
         this.renderPeople();
         this.renderQuickAdd();
@@ -697,23 +635,21 @@ class SnapFair {
     });
   }
 
-  // ----- Assignments -----
+  // ═══════════════════════════════════════
+  //  ASSIGNMENTS
+  // ═══════════════════════════════════════
 
   initAssignments() {
     for (const item of this.items) {
-      if (!this.assignments[item.id]) {
-        this.assignments[item.id] = new Set();
-      }
+      if (!this.assignments[item.id]) this.assignments[item.id] = new Set();
     }
   }
 
   renderAssignments() {
     const list = this.$('#assign-list');
-
     list.innerHTML = this.items.map(item => {
       const assigned = this.assignments[item.id] || new Set();
       const allAssigned = assigned.size === this.people.length;
-
       return `
         <div class="assign-card" data-item-id="${item.id}">
           <div class="assign-card-header">
@@ -722,16 +658,12 @@ class SnapFair {
           </div>
           <div class="assign-people">
             ${this.people.map((p, i) => `
-              <button class="assign-person-btn ${assigned.has(p.id) ? 'assigned' : ''}" 
-                      data-item-id="${item.id}" data-person-id="${p.id}">
-                <span class="mini-avatar" style="background:${this.getColor(i)}">
-                  ${this.getInitials(p.name)}
-                </span>
+              <button class="assign-person-btn ${assigned.has(p.id) ? 'assigned' : ''}" data-item-id="${item.id}" data-person-id="${p.id}">
+                <span class="mini-avatar" style="background:${this.getColor(i)}">${this.getInitials(p.name)}</span>
                 ${this.escapeHtml(p.name)}
               </button>
             `).join('')}
-            <button class="assign-everyone ${allAssigned ? 'all-assigned' : ''}" 
-                    data-item-id="${item.id}">
+            <button class="assign-everyone ${allAssigned ? 'all-assigned' : ''}" data-item-id="${item.id}">
               ${allAssigned ? '✓ Everyone' : 'Everyone'}
             </button>
           </div>
@@ -740,251 +672,71 @@ class SnapFair {
     }).join('');
 
     list.querySelectorAll('.assign-person-btn').forEach(el => {
-      el.addEventListener('click', () => {
-        this.vibrate(5);
-        this.toggleAssignment(el.dataset.itemId, el.dataset.personId);
-      });
+      el.addEventListener('click', () => { this.vibrate(5); this.toggleAssignment(el.dataset.itemId, el.dataset.personId); });
     });
-
     list.querySelectorAll('.assign-everyone').forEach(el => {
-      el.addEventListener('click', () => {
-        this.vibrate(5);
-        this.assignEveryone(el.dataset.itemId);
-      });
+      el.addEventListener('click', () => { this.vibrate(5); this.assignEveryone(el.dataset.itemId); });
     });
   }
 
   toggleAssignment(itemId, personId) {
     if (!this.assignments[itemId]) this.assignments[itemId] = new Set();
     const set = this.assignments[itemId];
-    if (set.has(personId)) {
-      set.delete(personId);
-    } else {
-      set.add(personId);
-    }
+    set.has(personId) ? set.delete(personId) : set.add(personId);
     this.renderAssignments();
   }
 
   assignEveryone(itemId) {
     if (!this.assignments[itemId]) this.assignments[itemId] = new Set();
     const set = this.assignments[itemId];
-    if (set.size === this.people.length) {
-      set.clear();
-    } else {
-      this.people.forEach(p => set.add(p.id));
-    }
+    set.size === this.people.length ? set.clear() : this.people.forEach(p => set.add(p.id));
     this.renderAssignments();
   }
 
   validateAssignments() {
-    const unassigned = this.items.filter(item => {
-      const a = this.assignments[item.id];
-      return !a || a.size === 0;
-    });
-    if (unassigned.length > 0) {
-      this.toast(`⚠️ Assign "${unassigned[0].name}" to someone`, 'warning');
-      return false;
-    }
+    const un = this.items.find(item => { const a = this.assignments[item.id]; return !a || a.size === 0; });
+    if (un) { this.toast(`Assign "${un.name}" to someone`, 'warning'); return false; }
     return true;
   }
 
-  // ----- Calculations -----
+  // ═══════════════════════════════════════
+  //  CALCULATIONS
+  // ═══════════════════════════════════════
 
-  getSubtotal() {
-    return this.items.reduce((sum, item) => sum + item.price, 0);
-  }
-
-  getTipAmount() {
-    if (this.tipMode === 'custom') return this.tipCustom;
-    return this.getSubtotal() * (this.tipPercent / 100);
-  }
+  getSubtotal() { return this.items.reduce((s, i) => s + i.price, 0); }
+  getTipAmount() { return this.tipMode === 'custom' ? this.tipCustom : this.getSubtotal() * (this.tipPercent / 100); }
 
   getPersonBreakdown(personId) {
     const items = [];
     let subtotal = 0;
-
     for (const item of this.items) {
       const assigned = this.assignments[item.id];
       if (assigned && assigned.has(personId)) {
         const share = item.price / assigned.size;
-        items.push({
-          name: item.name,
-          fullPrice: item.price,
-          share: share,
-          sharedWith: assigned.size
-        });
+        items.push({ name: item.name, fullPrice: item.price, share, sharedWith: assigned.size });
         subtotal += share;
       }
     }
-
-    const totalSubtotal = this.getSubtotal();
-    const proportion = totalSubtotal > 0 ? subtotal / totalSubtotal : 0;
+    const totalSub = this.getSubtotal();
+    const proportion = totalSub > 0 ? subtotal / totalSub : 0;
     const taxShare = this.tax * proportion;
     const tipShare = this.getTipAmount() * proportion;
-    const total = subtotal + taxShare + tipShare;
-
-    return { items, subtotal, taxShare, tipShare, total, proportion };
+    return { items, subtotal, taxShare, tipShare, total: subtotal + taxShare + tipShare, proportion };
   }
 
-  // ----- Summary Rendering -----
+  // ═══════════════════════════════════════
+  //  SUMMARY
+  // ═══════════════════════════════════════
 
   renderSummary() {
     this.$('#tax-input').value = this.tax.toFixed(2);
     this.renderSummaryTotals();
   }
 
-  buildPayLinks(amount, personName) {
-    const handles = {
-      paypal:   this.$('#paypal-handle')?.value.trim() || '',
-      wise:     this.$('#wise-handle')?.value.trim() || '',
-      revolut:  this.$('#revolut-handle')?.value.trim() || '',
-      venmo:    this.$('#venmo-handle')?.value.trim() || '',
-      cashapp:  this.$('#cashapp-handle')?.value.trim() || '',
-      bankName: this.$('#bank-name-handle')?.value.trim() || '',
-      bankIban: this.$('#bank-iban-handle')?.value.trim() || '',
-    };
-
-    const note = encodeURIComponent(`SnapFair split - ${personName}`);
-    let links = '';
-
-    if (handles.revolut) {
-      links += `<a href="https://revolut.me/${handles.revolut}"
-                  target="_blank" rel="noopener noreferrer"
-                  class="pay-link revolut">
-                  Revolut ${this.formatMoney(amount)}</a>`;
-    }
-
-    if (handles.wise) {
-      const wiseUrl = handles.wise.startsWith('http')
-        ? handles.wise
-        : `https://wise.com/pay/${handles.wise}`;
-      links += `<a href="${wiseUrl}"
-                  target="_blank" rel="noopener noreferrer"
-                  class="pay-link wise">
-                  Wise ${this.formatMoney(amount)}</a>`;
-    }
-
-    if (handles.paypal) {
-      links += `<a href="https://paypal.me/${handles.paypal}/${amount.toFixed(2)}"
-                  target="_blank" rel="noopener noreferrer"
-                  class="pay-link paypal">
-                  PayPal ${this.formatMoney(amount)}</a>`;
-    }
-
-    if (handles.venmo) {
-      links += `<a href="https://venmo.com/${handles.venmo}?txn=charge&amount=${amount.toFixed(2)}&note=${note}"
-                  target="_blank" rel="noopener noreferrer"
-                  class="pay-link venmo">
-                  Venmo ${this.formatMoney(amount)}</a>`;
-    }
-
-    if (handles.cashapp) {
-      const tag = handles.cashapp.replace(/^\$/, '');
-      links += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}"
-                  target="_blank" rel="noopener noreferrer"
-                  class="pay-link cashapp">
-                  Cash App ${this.formatMoney(amount)}</a>`;
-    }
-
-    if (handles.bankName && handles.bankIban) {
-      links += `<div class="bank-details">
-                  <div>
-                    <span class="bank-label">Name: </span>
-                    <span class="bank-value">${this.escapeHtml(handles.bankName)}</span>
-                  </div>
-                  <div>
-                    <span class="bank-label">IBAN: </span>
-                    <span class="bank-value" onclick="app.copyIBAN(this)">${this.escapeHtml(handles.bankIban)}</span>
-                  </div>
-                </div>`;
-    }
-
-    return links;
-  }
-
-  copyIBAN(el) {
-    navigator.clipboard.writeText(el.textContent).then(() => {
-      this.toast('📋 IBAN copied!', 'success');
-    }).catch(() => {
-      const range = document.createRange();
-      range.selectNode(el);
-      window.getSelection().removeAllRanges();
-      window.getSelection().addRange(range);
-      document.execCommand('copy');
-      window.getSelection().removeAllRanges();
-      this.toast('📋 IBAN copied!', 'success');
-    });
-  }
-
-  renderSummaryTotals() {
-    this.tax = parseFloat(this.$('#tax-input').value) || 0;
-
-    const summaryList = this.$('#summary-list');
-
-    let html = '';
-
-    this.people.forEach((person, index) => {
-      const breakdown = this.getPersonBreakdown(person.id);
-
-      const payLinksHtml = this.buildPayLinks(breakdown.total, person.name);
-      let paySection = '';
-      if (payLinksHtml) {
-        paySection = `<div class="summary-pay-links">${payLinksHtml}</div>`;
-      }
-
-      html += `
-        <div class="summary-card">
-          <div class="summary-card-header">
-            <div class="summary-person-info">
-              <div class="person-avatar" style="background:${this.getColor(index)}">
-                ${this.getInitials(person.name)}
-              </div>
-              <span class="summary-person-name">${this.escapeHtml(person.name)}</span>
-            </div>
-            <span class="summary-person-total">${this.formatMoney(breakdown.total)}</span>
-          </div>
-          <div class="summary-card-details">
-            ${breakdown.items.map(item => `
-              <div class="summary-item-row">
-                <span>${this.escapeHtml(item.name)}${item.sharedWith > 1 ? ` (÷${item.sharedWith})` : ''}</span>
-                <span>${this.formatMoney(item.share)}</span>
-              </div>
-            `).join('')}
-            ${this.tax > 0 ? `
-              <div class="summary-item-row tax-row">
-                <span>Tax</span>
-                <span>${this.formatMoney(breakdown.taxShare)}</span>
-              </div>
-            ` : ''}
-            ${this.getTipAmount() > 0 ? `
-              <div class="summary-item-row tip-row">
-                <span>Tip</span>
-                <span>${this.formatMoney(breakdown.tipShare)}</span>
-              </div>
-            ` : ''}
-          </div>
-          ${paySection}
-        </div>
-      `;
-    });
-
-    summaryList.innerHTML = html;
-
-    const subtotal = this.getSubtotal();
-    const tipAmount = this.getTipAmount();
-    const grandTotal = subtotal + this.tax + tipAmount;
-
-    this.$('#check-subtotal').textContent = this.formatMoney(subtotal);
-    this.$('#check-tax').textContent = this.formatMoney(this.tax);
-    this.$('#check-tip').textContent = this.formatMoney(tipAmount);
-    this.$('#check-total').textContent = this.formatMoney(grandTotal);
-  }
-
   handleTipBtn(btn) {
     this.vibrate(5);
     this.$$('.tip-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-
     const val = btn.dataset.tip;
     if (val === 'custom') {
       this.tipMode = 'custom';
@@ -995,222 +747,423 @@ class SnapFair {
       this.tipPercent = parseInt(val);
       this.$('#custom-tip-row').classList.add('hidden');
     }
-
     this.renderSummaryTotals();
   }
 
-  // ----- Share & Copy -----
-
-  async shareSplit() {
-    const text = this.buildSummaryText();
-    const shareData = this.buildShareableData();
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'SnapFair — Bill Split',
-          text: text,
-          url: shareData.url
-        });
-        this.toast('📤 Shared!', 'success');
-        return;
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(shareData.url + '\n\n' + text);
-      this.toast('📋 Link & summary copied!', 'success');
-    } catch {
-      this.toast('Could not share', 'error');
-    }
-  }
-
-  async copySummary() {
-    const text = this.buildSummaryText();
-    try {
-      await navigator.clipboard.writeText(text);
-      this.toast('📋 Summary copied!', 'success');
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      this.toast('📋 Summary copied!', 'success');
-    }
-  }
-
-  buildSummaryText() {
-    const subtotal = this.getSubtotal();
-    const tipAmount = this.getTipAmount();
-    const lines = ['🧾 SnapFair — Bill Split\n'];
-
-    this.people.forEach(person => {
-      const bd = this.getPersonBreakdown(person.id);
-      lines.push(`${person.name}: ${this.formatMoney(bd.total)}`);
-      bd.items.forEach(item => {
-        const shared = item.sharedWith > 1 ? ` (÷${item.sharedWith})` : '';
-        lines.push(`  • ${item.name}${shared}: ${this.formatMoney(item.share)}`);
-      });
-      if (bd.taxShare > 0) lines.push(`  • Tax: ${this.formatMoney(bd.taxShare)}`);
-      if (bd.tipShare > 0) lines.push(`  • Tip: ${this.formatMoney(bd.tipShare)}`);
-      lines.push('');
-    });
-
-    lines.push(`Total: ${this.formatMoney(subtotal + this.tax + tipAmount)}`);
-    return lines.join('\n');
-  }
-
-  buildShareableData() {
-    const data = {
-      i: this.items.map(item => ({
-        n: item.name,
-        p: item.price,
-        a: Array.from(this.assignments[item.id] || [])
-      })),
-      p: this.people.map(p => ({ id: p.id, n: p.name })),
-      t: this.tax,
-      tp: this.tipMode === 'custom' ? this.tipCustom : this.tipPercent,
-      tm: this.tipMode
+  getPaymentHandles() {
+    return {
+      pp: this.$('#paypal-handle')?.value.trim() || '',
+      ws: this.$('#wise-handle')?.value.trim() || '',
+      rv: this.$('#revolut-handle')?.value.trim() || '',
+      vm: this.$('#venmo-handle')?.value.trim() || '',
+      ca: this.$('#cashapp-handle')?.value.trim() || '',
+      bn: this.$('#bank-name-handle')?.value.trim() || '',
+      bi: this.$('#bank-iban-handle')?.value.trim() || '',
     };
-
-    try {
-      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-      return { url: `${window.location.origin}${window.location.pathname}#split=${encoded}` };
-    } catch {
-      return { url: window.location.href };
-    }
   }
 
-  loadSharedSplit() {
-    const hash = window.location.hash;
-    if (!hash.startsWith('#split=')) return false;
+  buildPayLinks(amount, personName) {
+    const h = this.getPaymentHandles();
+    const note = encodeURIComponent(`SnapFair split - ${personName}`);
+    let links = '';
+    if (h.rv) links += `<a href="https://revolut.me/${h.rv}" target="_blank" rel="noopener" class="pay-link revolut">Revolut ${this.formatMoney(amount)}</a>`;
+    if (h.ws) { const u = h.ws.startsWith('http') ? h.ws : `https://wise.com/pay/${h.ws}`; links += `<a href="${u}" target="_blank" rel="noopener" class="pay-link wise">Wise ${this.formatMoney(amount)}</a>`; }
+    if (h.pp) links += `<a href="https://paypal.me/${h.pp}/${amount.toFixed(2)}" target="_blank" rel="noopener" class="pay-link paypal">PayPal ${this.formatMoney(amount)}</a>`;
+    if (h.vm) links += `<a href="https://venmo.com/${h.vm}?txn=charge&amount=${amount.toFixed(2)}&note=${note}" target="_blank" rel="noopener" class="pay-link venmo">Venmo ${this.formatMoney(amount)}</a>`;
+    if (h.ca) { const tag = h.ca.replace(/^\$/, ''); links += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}" target="_blank" rel="noopener" class="pay-link cashapp">Cash App ${this.formatMoney(amount)}</a>`; }
+    if (h.bn && h.bi) links += `<div class="bank-details"><div><span class="bank-label">Name: </span><span class="bank-value" onclick="app.copyText(this)">${this.escapeHtml(h.bn)}</span></div><div><span class="bank-label">IBAN: </span><span class="bank-value" onclick="app.copyText(this)">${this.escapeHtml(h.bi)}</span></div></div>`;
+    return links;
+  }
 
-    try {
-      const encoded = hash.slice(7);
-      const json = decodeURIComponent(escape(atob(encoded)));
-      const data = JSON.parse(json);
+  copyText(el) {
+    navigator.clipboard.writeText(el.textContent).then(() => this.toast('📋 Copied!', 'success')).catch(() => {});
+  }
 
-      this.people = data.p.map(p => ({ id: p.id, name: p.n }));
+  renderSummaryTotals() {
+    this.tax = parseFloat(this.$('#tax-input').value) || 0;
+    const summaryList = this.$('#summary-list');
+    let html = '';
 
-      this.items = data.i.map((item, idx) => {
-        const id = this.uid();
-        return { id, name: item.n, price: item.p, _assignees: item.a };
-      });
+    this.people.forEach((person, index) => {
+      const bd = this.getPersonBreakdown(person.id);
+      const payLinksHtml = this.buildPayLinks(bd.total, person.name);
+      const token = this.escrowTokens[person.id];
+      const isVerified = token?.status === 'verified';
 
-      this.assignments = {};
-      this.items.forEach((item, idx) => {
-        const original = data.i[idx];
-        this.assignments[item.id] = new Set(original.a);
-      });
-
-      this.tax = data.t || 0;
-      this.tipMode = data.tm || 'percent';
-      if (this.tipMode === 'custom') {
-        this.tipCustom = data.tp || 0;
-      } else {
-        this.tipPercent = data.tp || 0;
+      // Escrow badge
+      let badgeHtml = '';
+      if (token) {
+        badgeHtml = `<span class="escrow-badge ${isVerified ? 'verified' : 'pending'}">${isVerified ? '✅ Paid' : '⏳ Pending'}</span>`;
       }
 
-      this.renderSharedView();
-      this.showScreen('shared');
-      return true;
-    } catch (err) {
-      console.error('Failed to load shared split:', err);
-      return false;
-    }
-  }
+      // Escrow button
+      const escrowBtnClass = isVerified ? 'btn-escrow verified-btn' : 'btn-escrow';
+      const escrowBtnText = isVerified ? '✅ Verified' : '🔐 Request Payment';
 
-  renderSharedView() {
-    const summaryEl = this.$('#shared-summary');
-    const totalsEl = this.$('#shared-totals');
-
-    let html = '';
-    this.people.forEach((person, index) => {
-      const breakdown = this.getPersonBreakdown(person.id);
       html += `
         <div class="summary-card">
+          ${badgeHtml}
           <div class="summary-card-header">
             <div class="summary-person-info">
-              <div class="person-avatar" style="background:${this.getColor(index)}">
-                ${this.getInitials(person.name)}
-              </div>
+              <div class="person-avatar" style="background:${this.getColor(index)}">${this.getInitials(person.name)}</div>
               <span class="summary-person-name">${this.escapeHtml(person.name)}</span>
             </div>
-            <span class="summary-person-total">${this.formatMoney(breakdown.total)}</span>
+            <span class="summary-person-total">${this.formatMoney(bd.total)}</span>
           </div>
           <div class="summary-card-details">
-            ${breakdown.items.map(item => `
+            ${bd.items.map(item => `
               <div class="summary-item-row">
                 <span>${this.escapeHtml(item.name)}${item.sharedWith > 1 ? ` (÷${item.sharedWith})` : ''}</span>
                 <span>${this.formatMoney(item.share)}</span>
               </div>
             `).join('')}
-            ${breakdown.taxShare > 0 ? `
-              <div class="summary-item-row tax-row"><span>Tax</span><span>${this.formatMoney(breakdown.taxShare)}</span></div>
-            ` : ''}
-            ${breakdown.tipShare > 0 ? `
-              <div class="summary-item-row tip-row"><span>Tip</span><span>${this.formatMoney(breakdown.tipShare)}</span></div>
-            ` : ''}
+            ${this.tax > 0 ? `<div class="summary-item-row tax-row"><span>Tax</span><span>${this.formatMoney(bd.taxShare)}</span></div>` : ''}
+            ${this.getTipAmount() > 0 ? `<div class="summary-item-row tip-row"><span>Tip</span><span>${this.formatMoney(bd.tipShare)}</span></div>` : ''}
+          </div>
+          ${payLinksHtml ? `<div class="summary-pay-links">${payLinksHtml}</div>` : ''}
+          <div class="summary-pay-links" style="justify-content:center">
+            <button class="${escrowBtnClass}" data-person-id="${person.id}">${escrowBtnText}</button>
           </div>
         </div>
       `;
     });
 
-    summaryEl.innerHTML = html;
+    summaryList.innerHTML = html;
+
+    // Bind escrow buttons
+    summaryList.querySelectorAll('.btn-escrow').forEach(btn => {
+      btn.addEventListener('click', () => this.openEscrowModal(btn.dataset.personId));
+    });
 
     const subtotal = this.getSubtotal();
     const tipAmount = this.getTipAmount();
+    this.$('#check-subtotal').textContent = this.formatMoney(subtotal);
+    this.$('#check-tax').textContent = this.formatMoney(this.tax);
+    this.$('#check-tip').textContent = this.formatMoney(tipAmount);
+    this.$('#check-total').textContent = this.formatMoney(subtotal + this.tax + tipAmount);
+  }
+
+  // ═══════════════════════════════════════
+  //  ESCROW / QR CODE SYSTEM
+  // ═══════════════════════════════════════
+
+  generateEscrowCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  openEscrowModal(personId) {
+    const person = this.people.find(p => p.id === personId);
+    if (!person) return;
+    const bd = this.getPersonBreakdown(personId);
+
+    // Generate or reuse code
+    if (!this.escrowTokens[personId]) {
+      this.escrowTokens[personId] = { code: this.generateEscrowCode(), status: 'pending' };
+    }
+    const token = this.escrowTokens[personId];
+
+    // Build compact payment URL
+    const payData = {
+      n: person.name,
+      a: Math.round(bd.total * 100) / 100,
+      c: btoa(token.code),
+      it: bd.items.map(i => ({ n: i.name, s: Math.round(i.share * 100) / 100, w: i.sharedWith })),
+      tx: Math.round(bd.taxShare * 100) / 100,
+      tp: Math.round(bd.tipShare * 100) / 100,
+      py: this.getPaymentHandles()
+    };
+
+    let payUrl;
+    try {
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payData))));
+      payUrl = `${window.location.origin}${window.location.pathname}#pay=${encoded}`;
+    } catch {
+      payUrl = window.location.href;
+    }
+
+    // Build modal
+    const modal = this.$('#escrow-modal');
+    const body = this.$('#escrow-modal-body');
+
+    body.innerHTML = `
+      <h3>🔐 Payment Request</h3>
+      <div class="escrow-info">
+        <div class="escrow-person">For: <strong>${this.escapeHtml(person.name)}</strong></div>
+        <div class="escrow-amount">${this.formatMoney(bd.total)}</div>
+      </div>
+      <div class="escrow-qr"><canvas id="escrow-qr-canvas"></canvas></div>
+      <div class="escrow-code-section">
+        <label>Your confirmation code</label>
+        <div class="escrow-code ${token.status === 'verified' ? 'verified' : ''}">${token.code}</div>
+        <p class="text-muted small">Payer receives this code after confirming payment</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary btn-block" id="btn-escrow-share">📤 Share Payment Link</button>
+        <button class="btn btn-secondary btn-block" id="btn-escrow-copy">📋 Copy Link</button>
+      </div>
+      <div class="escrow-verify-section">
+        <label>Verify payment — enter code from payer:</label>
+        <div class="escrow-verify-row">
+          <input type="text" id="escrow-verify-input" class="input" placeholder="CODE" maxlength="6">
+          <button class="btn btn-primary" id="btn-escrow-verify">Verify</button>
+        </div>
+        ${token.status === 'verified' ? '<div class="escrow-verified">✅ Payment Verified!</div>' : ''}
+      </div>
+      <button class="btn btn-outline btn-block" id="btn-escrow-close">Close</button>
+    `;
+
+    modal.classList.remove('hidden');
+
+    // Generate QR code
+    try {
+      if (typeof QRCode !== 'undefined') {
+        QRCode.toCanvas(this.$('#escrow-qr-canvas'), payUrl, {
+          width: 220, margin: 2,
+          color: { dark: '#111827', light: '#FFFFFF' }
+        }, (err) => { if (err) console.warn('QR Error:', err); });
+      }
+    } catch (e) { console.warn('QR generation failed:', e); }
+
+    // Events
+    this.$('#btn-escrow-share').addEventListener('click', async () => {
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: `Payment Request — ${person.name}`, text: `${person.name} owes ${this.formatMoney(bd.total)}`, url: payUrl });
+          return;
+        } catch {}
+      }
+      await navigator.clipboard.writeText(payUrl).catch(() => {});
+      this.toast('📋 Link copied!', 'success');
+    });
+
+    this.$('#btn-escrow-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(payUrl); } catch {}
+      this.toast('📋 Link copied!', 'success');
+    });
+
+    this.$('#btn-escrow-verify').addEventListener('click', () => {
+      const input = this.$('#escrow-verify-input').value.trim().toUpperCase();
+      if (input === token.code) {
+        token.status = 'verified';
+        this.vibrate(20);
+        this.toast('✅ Payment verified!', 'success');
+        modal.classList.add('hidden');
+        this.renderSummaryTotals();
+      } else {
+        this.toast('❌ Code doesn\'t match', 'error');
+        this.vibrate([50, 30, 50]);
+      }
+    });
+
+    this.$('#escrow-verify-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') this.$('#btn-escrow-verify')?.click();
+    });
+
+    this.$('#btn-escrow-close').addEventListener('click', () => modal.classList.add('hidden'));
+  }
+
+  // ── Load Payment Request (payer opens QR link) ──
+
+  loadPaymentRequest() {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#pay=')) return false;
+
+    try {
+      const encoded = hash.slice(5);
+      const json = decodeURIComponent(escape(atob(encoded)));
+      const data = JSON.parse(json);
+      this.renderPaymentRequestScreen(data);
+      return true;
+    } catch (err) {
+      console.error('Failed to load payment request:', err);
+      return false;
+    }
+  }
+
+  renderPaymentRequestScreen(data) {
+    this.showScreen('pay-request');
+    const container = this.$('#pay-request-content');
+    const code = atob(data.c);
+    const amount = data.a;
+    const handles = data.py || {};
+    const note = encodeURIComponent(`SnapFair - ${data.n}`);
+
+    let payLinks = '';
+    if (handles.rv) payLinks += `<a href="https://revolut.me/${handles.rv}" target="_blank" class="pay-link revolut">Revolut</a>`;
+    if (handles.ws) { const u = handles.ws.startsWith('http') ? handles.ws : `https://wise.com/pay/${handles.ws}`; payLinks += `<a href="${u}" target="_blank" class="pay-link wise">Wise</a>`; }
+    if (handles.pp) payLinks += `<a href="https://paypal.me/${handles.pp}/${amount.toFixed(2)}" target="_blank" class="pay-link paypal">PayPal</a>`;
+    if (handles.vm) payLinks += `<a href="https://venmo.com/${handles.vm}?txn=charge&amount=${amount.toFixed(2)}&note=${note}" target="_blank" class="pay-link venmo">Venmo</a>`;
+    if (handles.ca) { const tag = handles.ca.replace(/^\$/, ''); payLinks += `<a href="https://cash.app/$${tag}/${amount.toFixed(2)}" target="_blank" class="pay-link cashapp">Cash App</a>`; }
+
+    container.innerHTML = `
+      <div class="pay-request-card">
+        <div class="pay-request-header">
+          <div class="pay-request-amount">${this.formatMoney(amount)}</div>
+          <div class="pay-request-for">Payment requested from <strong>${this.escapeHtml(data.n)}</strong></div>
+        </div>
+        <div class="pay-request-items">
+          ${(data.it || []).map(i => `
+            <div class="summary-item-row">
+              <span>${this.escapeHtml(i.n)}${i.w > 1 ? ` (÷${i.w})` : ''}</span>
+              <span>${this.formatMoney(i.s)}</span>
+            </div>
+          `).join('')}
+          ${data.tx > 0 ? `<div class="summary-item-row tax-row"><span>Tax</span><span>${this.formatMoney(data.tx)}</span></div>` : ''}
+          ${data.tp > 0 ? `<div class="summary-item-row tip-row"><span>Tip</span><span>${this.formatMoney(data.tp)}</span></div>` : ''}
+        </div>
+        ${payLinks ? `<div class="pay-request-methods"><p class="text-muted small">Pay via:</p><div class="pay-links-row">${payLinks}</div></div>` : ''}
+        ${handles.bn && handles.bi ? `
+          <div style="padding:12px 20px;border-top:1px solid var(--border)">
+            <div class="bank-details">
+              <div><span class="bank-label">Name: </span><span class="bank-value">${this.escapeHtml(handles.bn)}</span></div>
+              <div><span class="bank-label">IBAN: </span><span class="bank-value">${this.escapeHtml(handles.bi)}</span></div>
+            </div>
+          </div>
+        ` : ''}
+        <div class="pay-request-confirm">
+          <button class="btn btn-primary btn-large btn-block" id="btn-confirm-paid">✅ I've Paid</button>
+        </div>
+        <div class="pay-request-code hidden" id="pay-code-reveal">
+          <div class="code-reveal-label">Your confirmation code:</div>
+          <div class="code-reveal-value">${code}</div>
+          <p class="text-muted small" style="margin-top:8px">Share this code with the requester to confirm your payment</p>
+        </div>
+      </div>
+    `;
+
+    this.$('#btn-confirm-paid').addEventListener('click', () => {
+      const btn = this.$('#btn-confirm-paid');
+      btn.disabled = true;
+      btn.textContent = '✅ Payment Confirmed!';
+      btn.style.background = '#22C55E';
+      this.$('#pay-code-reveal').classList.remove('hidden');
+      this.vibrate(20);
+      this.toast('Code revealed! Share it with the requester', 'success', 4000);
+    });
+  }
+
+  // ═══════════════════════════════════════
+  //  SHARE / COPY
+  // ═══════════════════════════════════════
+
+  async shareSplit() {
+    const text = this.buildSummaryText();
+    const shareData = this.buildShareableData();
+    if (navigator.share) {
+      try { await navigator.share({ title: 'SnapFair — Bill Split', text, url: shareData.url }); this.toast('📤 Shared!', 'success'); return; } catch (err) { if (err.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(shareData.url + '\n\n' + text); this.toast('📋 Link & summary copied!', 'success'); } catch { this.toast('Could not share', 'error'); }
+  }
+
+  async copySummary() {
+    const text = this.buildSummaryText();
+    try { await navigator.clipboard.writeText(text); this.toast('📋 Summary copied!', 'success'); }
+    catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); this.toast('📋 Summary copied!', 'success'); }
+  }
+
+  buildSummaryText() {
+    const lines = ['🧾 SnapFair — Bill Split\n'];
+    this.people.forEach(person => {
+      const bd = this.getPersonBreakdown(person.id);
+      lines.push(`${person.name}: ${this.formatMoney(bd.total)}`);
+      bd.items.forEach(item => {
+        lines.push(`  • ${item.name}${item.sharedWith > 1 ? ` (÷${item.sharedWith})` : ''}: ${this.formatMoney(item.share)}`);
+      });
+      if (bd.taxShare > 0) lines.push(`  • Tax: ${this.formatMoney(bd.taxShare)}`);
+      if (bd.tipShare > 0) lines.push(`  • Tip: ${this.formatMoney(bd.tipShare)}`);
+      lines.push('');
+    });
+    lines.push(`Total: ${this.formatMoney(this.getSubtotal() + this.tax + this.getTipAmount())}`);
+    return lines.join('\n');
+  }
+
+  buildShareableData() {
+    const data = {
+      i: this.items.map(item => ({ n: item.name, p: item.price, a: Array.from(this.assignments[item.id] || []) })),
+      p: this.people.map(p => ({ id: p.id, n: p.name })),
+      t: this.tax, tp: this.tipMode === 'custom' ? this.tipCustom : this.tipPercent, tm: this.tipMode
+    };
+    try {
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+      return { url: `${window.location.origin}${window.location.pathname}#split=${encoded}` };
+    } catch { return { url: window.location.href }; }
+  }
+
+  loadSharedSplit() {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#split=')) return false;
+    try {
+      const encoded = hash.slice(7);
+      const data = JSON.parse(decodeURIComponent(escape(atob(encoded))));
+      this.people = data.p.map(p => ({ id: p.id, name: p.n }));
+      this.items = data.i.map((item) => { const id = this.uid(); return { id, name: item.n, price: item.p, _a: item.a }; });
+      this.assignments = {};
+      this.items.forEach((item, idx) => { this.assignments[item.id] = new Set(data.i[idx].a); });
+      this.tax = data.t || 0;
+      this.tipMode = data.tm || 'percent';
+      if (this.tipMode === 'custom') this.tipCustom = data.tp || 0; else this.tipPercent = data.tp || 0;
+      this.renderSharedView();
+      this.showScreen('shared');
+      return true;
+    } catch (err) { console.error('Shared split load failed:', err); return false; }
+  }
+
+  renderSharedView() {
+    const summaryEl = this.$('#shared-summary');
+    const totalsEl = this.$('#shared-totals');
+    let html = '';
+    this.people.forEach((person, index) => {
+      const bd = this.getPersonBreakdown(person.id);
+      html += `
+        <div class="summary-card">
+          <div class="summary-card-header">
+            <div class="summary-person-info">
+              <div class="person-avatar" style="background:${this.getColor(index)}">${this.getInitials(person.name)}</div>
+              <span class="summary-person-name">${this.escapeHtml(person.name)}</span>
+            </div>
+            <span class="summary-person-total">${this.formatMoney(bd.total)}</span>
+          </div>
+          <div class="summary-card-details">
+            ${bd.items.map(i => `<div class="summary-item-row"><span>${this.escapeHtml(i.name)}${i.sharedWith > 1 ? ` (÷${i.sharedWith})` : ''}</span><span>${this.formatMoney(i.share)}</span></div>`).join('')}
+            ${bd.taxShare > 0 ? `<div class="summary-item-row tax-row"><span>Tax</span><span>${this.formatMoney(bd.taxShare)}</span></div>` : ''}
+            ${bd.tipShare > 0 ? `<div class="summary-item-row tip-row"><span>Tip</span><span>${this.formatMoney(bd.tipShare)}</span></div>` : ''}
+          </div>
+        </div>
+      `;
+    });
+    summaryEl.innerHTML = html;
+    const sub = this.getSubtotal(), tip = this.getTipAmount();
     totalsEl.innerHTML = `
-      <div class="totals-row"><span>Subtotal</span><span>${this.formatMoney(subtotal)}</span></div>
+      <div class="totals-row"><span>Subtotal</span><span>${this.formatMoney(sub)}</span></div>
       <div class="totals-row"><span>Tax</span><span>${this.formatMoney(this.tax)}</span></div>
-      <div class="totals-row"><span>Tip</span><span>${this.formatMoney(tipAmount)}</span></div>
-      <div class="totals-row total"><span>Total</span><span>${this.formatMoney(subtotal + this.tax + tipAmount)}</span></div>
+      <div class="totals-row"><span>Tip</span><span>${this.formatMoney(tip)}</span></div>
+      <div class="totals-row total"><span>Total</span><span>${this.formatMoney(sub + this.tax + tip)}</span></div>
     `;
   }
 
-  // ----- Reset -----
+  // ───── Reset ─────
 
   resetApp() {
-    this.items = [];
-    this.people = [];
-    this.assignments = {};
-    this.tax = 0;
-    this.tipPercent = 0;
-    this.tipCustom = 0;
-    this.tipMode = 'percent';
-    this.currentStep = 0;
+    this.items = []; this.people = []; this.assignments = {};
+    this.tax = 0; this.tipPercent = 0; this.tipCustom = 0;
+    this.tipMode = 'percent'; this.currentStep = 0; this.escrowTokens = {};
     this.$$('.tip-btn').forEach(b => b.classList.remove('active'));
     this.$('#custom-tip-row')?.classList.add('hidden');
     window.location.hash = '';
     this.showScreen('home');
   }
 
-  // ----- Helpers -----
-
-  escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  // ----- PWA -----
+  // ───── PWA ─────
 
   async registerSW() {
     if ('serviceWorker' in navigator) {
-      try {
-        await navigator.serviceWorker.register('/sw.js');
-      } catch (err) {
-        console.log('SW registration failed:', err);
-      }
+      try { await navigator.serviceWorker.register('/sw.js'); } catch {}
     }
   }
 }
 
-// ----- Launch -----
-document.addEventListener('DOMContentLoaded', () => {
-  window.app = new SnapFair();
-});
+// ───── Launch ─────
+document.addEventListener('DOMContentLoaded', () => { window.app = new SnapFair(); });
